@@ -1617,14 +1617,15 @@ class Arena {
   async capture(D, o, C) {
     // o: {beast: key|null, owner: key|null, text}
     const svg = D.svg;
-    await an(D.mover, [{ transform: 'none' }, { transform: 'scale(1.1) rotate(-6deg)', filter: 'brightness(2)' }, { transform: 'scale(.15) rotate(30deg)', opacity: 0 }], 600, { easing: 'ease-in' });
+    const k = o.quick ? .45 : 1;
+    await an(D.mover, [{ transform: 'none' }, { transform: 'scale(1.1) rotate(-6deg)', filter: 'brightness(2)' }, { transform: 'scale(.15) rotate(30deg)', opacity: 0 }], 600 * k, { easing: 'ease-in' });
     const c = this.pt(D, 100, 130); this.particles(c.x, c.y, { kind: 'smoke', color: ['#fff', '#eceff1', '#cfd8dc'], n: 12, spread: 3.1, speed: 70, gravity: -10, size: 40, spin: 0, dur: 700 });
     this.burst(c.x, c.y, { size: 130, color: '#fff', stroke: '#90a4ae' });
     D.flip.innerHTML = o.beast ? C[o.beast]() : C[o.key]();
     clear(D.mover);
-    await an(D.mover, [{ transform: 'scale(.2)', opacity: 0 }, { transform: 'scale(1.1)', opacity: 1, offset: .7 }, { transform: 'none', opacity: 1 }], 450, { easing: 'cubic-bezier(.3,1.6,.5,1)' });
+    await an(D.mover, [{ transform: 'scale(.2)', opacity: 0 }, { transform: 'scale(1.1)', opacity: 1, offset: .7 }, { transform: 'none', opacity: 1 }], 450 * k, { easing: 'cubic-bezier(.3,1.6,.5,1)' });
     this.caption(o.text);
-    await sleep(500);
+    await sleep(o.quick ? 380 : 500);
     if (o.owner) {
       const ox = this.pt(D, 100, 100).x, top = this.pt(D, 100, 0).y;
       const sz = 180 * this.s;
@@ -1636,7 +1637,7 @@ class Arena {
       await an(g, [{ transform: 'translateY(0)' }, { transform: `translateY(-${this.H + sz}px)` }], 1400, { easing: 'ease-in' });
       g.remove();
     } else {
-      await an(D.mover, [{ transform: 'none' }, { transform: 'translateY(-14px) scaleX(-1)', offset: .2 }, { transform: `translateX(${-D.dir * this.W * .6}px) scaleX(-1)`, opacity: 0 }], 1100, { easing: 'ease-in' });
+      await an(D.mover, [{ transform: 'none' }, { transform: 'translateY(-14px) scaleX(-1)', offset: .2 }, { transform: `translateX(${-D.dir * this.W * .6}px) scaleX(-1)`, opacity: 0 }], o.quick ? 450 : 1100, { easing: 'ease-in' });
     }
   }
 }
@@ -3274,6 +3275,131 @@ window.QJ_DEF_STATE = DEF_STATE;
 window.QJ = { C, MV, G, DATA, Arena, an, clear, sleep, rnd, $, $$, esc, today, shuffle, pick, clone, Store, Bank, SRS, Sfx, Gear, ItemBy, toast, STAGES, stageUnlocked, name, ENEMY_KEYS, dayOf };
 })();
 
+/* 取经小英雄 · 云同步（离线网页版用）
+   数据放在一个私有 GitHub 仓库里（默认 pp99bb/qujing-data），用只能改这个仓库的令牌读写：
+   data/custom.json   家长加的题、改的题（家长端写，孩子端读）
+   data/settings.json 题量、题库等设置（家长端写，孩子端读）
+   data/kid.json      孩子的进度和复习记录（孩子端写，家长端读，用来出学习报告）
+   data/cmd.json      家长发给孩子端的指令，比如“重置进度”
+   没联网时一切照常，下次联网再同步。 */
+(function(){
+'use strict';
+const Q = window.QJ;
+const { Store, toast } = Q;
+const DEF_REPO = 'pp99bb/qujing-data';
+const b64e = s => { const b = new TextEncoder().encode(s); let t = ''; for (let i = 0; i < b.length; i += 0x8000) t += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(t); };
+const b64d = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)));
+const clone = o => JSON.parse(JSON.stringify(o));
+
+const Sync = {
+  sha: {}, last: 0, busy: false, err: '', kidAt: 0, timers: {},
+  get token() { return Store.ls('sync_token') || ''; },
+  get repo() { return Store.ls('sync_repo') || DEF_REPO; },
+  get on() { return !!this.token && !Store.cloud; },
+  configure(token, repo) { Store.ls('sync_token', (token || '').trim()); Store.ls('sync_repo', (repo || DEF_REPO).trim()); this.sha = {}; },
+  async req(path, opt = {}) {
+    const r = await fetch(`https://api.github.com/repos/${this.repo}/contents/${path}`, Object.assign({ cache: 'no-store' }, opt, {
+      headers: Object.assign({ Authorization: 'Bearer ' + this.token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }, opt.headers || {}) }));
+    return r;
+  },
+  async get(path) {
+    const r = await this.req(path + '?t=' + Date.now());
+    if (r.status === 404) { delete this.sha[path]; return null; }
+    if (!r.ok) throw new Error(r.status === 401 ? '同步码不对或已过期' : r.status === 403 ? '同步码没有这个仓库的权限' : 'GitHub ' + r.status);
+    const j = await r.json(); this.sha[path] = j.sha;
+    try { return JSON.parse(b64d(j.content || '')); } catch (e) { return null; }
+  },
+  // 写文件；merge(remote) 返回要写的内容，冲突时会拿最新的远端内容重新合并一次
+  async put(path, merge, msg) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let remote = null;
+      if (merge.length || !(path in this.sha)) remote = await this.get(path);
+      const data = merge(remote);
+      const body = { message: msg || 'update ' + path, content: b64e(JSON.stringify(data)) };
+      if (this.sha[path]) body.sha = this.sha[path];
+      const r = await this.req(path, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (r.ok) { const j = await r.json(); this.sha[path] = j.content.sha; return true; }
+      if (r.status === 409 || r.status === 422) { delete this.sha[path]; continue; }
+      throw new Error(r.status === 401 ? '同步码不对或已过期' : r.status === 403 ? '同步码没有写入权限' : 'GitHub ' + r.status);
+    }
+    throw new Error('同步冲突，稍后再试');
+  },
+  async test() { const r = await fetch(`https://api.github.com/repos/${this.repo}`, { cache: 'no-store', headers: { Authorization: 'Bearer ' + this.token, Accept: 'application/vnd.github+json' } }); if (!r.ok) throw new Error(r.status === 401 ? '同步码不对或已过期' : r.status === 404 ? '找不到仓库 ' + this.repo + '（或同步码没有它的权限）' : 'GitHub ' + r.status); const j = await r.json(); if (!j.private) toast('提醒：数据仓库是公开的，建议改成私有', 4000); return true; },
+
+  // ---------- 拉取 ----------
+  mergeCustom(remote) {
+    if (!remote) return false; let changed = false;
+    for (const id in remote) { const r = remote[id], l = Store.custom[id]; if (!l || (r.updated || 0) > (l.updated || 0)) { Store.custom[id] = r; changed = true; } }
+    if (changed) { Store.ls('custom', Store.custom); Store.onBank.forEach(f => f()); }
+    return changed;
+  },
+  async pull() {
+    if (!this.on || this.busy) return; this.busy = true;
+    try {
+      const isParent = window.QJ_APP === 'parent';
+      const [cu, se, kid, cmd] = await Promise.all([this.get('data/custom.json'), this.get('data/settings.json'), isParent ? this.get('data/kid.json') : null, isParent ? null : this.get('data/cmd.json')]);
+      this.mergeCustom(cu);
+      if (se && (se.ts || 0) > (Store.ls('sync_settings_ts') || 0)) {
+        Store.settings = Object.assign(Store.settings, se); Store.ls('settings', Store.settings); Store.ls('sync_settings_ts', se.ts || 0);
+        Store.onRemote.forEach(f => f('settings'));
+      }
+      if (isParent && kid) {
+        this.kidAt = kid.at || 0;
+        if (kid.state) Store.state = Object.assign(clone(window.QJ_DEF_STATE), kid.state);
+        if (kid.progress) Store.prog = Object.assign({ q: {}, ts: 0 }, kid.progress);
+        Store.onRemote.forEach(f => f('state'));
+      }
+      if (!isParent && cmd && cmd.reset && cmd.reset > (Store.state.resetAt || 0)) {
+        Store.state = Object.assign(clone(window.QJ_DEF_STATE), { resetAt: cmd.reset }); Store.prog = { q: {}, ts: 0 };
+        Store.ls('state', Store.state); Store.ls('progress', Store.prog); this.pushKid(0);
+        Store.onRemote.forEach(f => f('state'));
+      }
+      this.last = Date.now(); this.err = '';
+    } catch (e) { this.err = e.message || String(e); }
+    finally { this.busy = false; Sync.onStatus.forEach(f => f()); }
+  },
+  // ---------- 推送 ----------
+  pushKid(delay = 5000) {
+    if (!this.on || window.QJ_APP === 'parent') return;
+    clearTimeout(this.timers.kid);
+    this.timers.kid = setTimeout(() => this.put('data/kid.json', () => ({ at: Date.now(), state: Store.state, progress: Store.prog }), 'kid progress').then(() => { this.err = ''; }).catch(e => { this.err = e.message; }), delay);
+  },
+  async pushQuestion(q) { if (!this.on) return; await this.put('data/custom.json', remote => Object.assign(remote || {}, { [q.id]: q }), 'question ' + q.id); },
+  async pushQuestions(list) { if (!this.on || !list.length) return; await this.put('data/custom.json', remote => { const r = remote || {}; list.forEach(q => r[q.id] = q); return r; }, `add ${list.length} questions`); },
+  async pushSettings() { if (!this.on) return; const s = Object.assign({}, Store.settings, { ts: Date.now() }); Store.ls('sync_settings_ts', s.ts); await this.put('data/settings.json', () => s, 'settings'); },
+  async pushReset() { if (!this.on) return; await this.put('data/cmd.json', () => ({ reset: Date.now() }), 'reset progress'); },
+  onStatus: [],
+};
+Q.Sync = Sync;
+
+// 孩子端：进度一保存就（稍后）推上去；回到前台、每 5 分钟拉一次家长的改动
+const origFlush = Store.flush.bind(Store);
+Store.flush = function (name) {
+  const p = origFlush(name);
+  if (Sync.on && window.QJ_APP === 'kid' && (name === 'state' || name === 'progress')) Sync.pushKid();
+  if (Sync.on && window.QJ_APP === 'parent' && name === 'settings') Sync.pushSettings().catch(e => toast('设置没有同步上去：' + e.message, 3500));
+  return p;
+};
+// 家长端：家长端里的进度只是孩子进度的“镜像”，本地不保存，避免盖掉孩子的
+if (window.QJ_APP === 'parent') {
+  const f2 = Store.flush;
+  Store.flush = function (name) { if (name === 'state' || name === 'progress') { this.dirty[name] = false; return Promise.resolve(); } return f2.call(this, name); };
+}
+const origPut = Store.putQuestion.bind(Store);
+Store.putQuestion = async function (q) {
+  await origPut(q);
+  if (Sync.batch) { Sync.batch.push(clone(Store.custom[q.id] || q)); return; }
+  if (Sync.on && window.QJ_APP === 'parent') { try { await Sync.pushQuestion(clone(Store.custom[q.id] || q)); } catch (e) { toast('题目已存在这台电脑，但没同步上去：' + e.message, 4000); } }
+};
+addEventListener('visibilitychange', () => {
+  if (!Sync.on) return;
+  if (document.hidden && window.QJ_APP === 'kid') { clearTimeout(Sync.timers.kid); Sync.pushKid(0); }
+  if (!document.hidden && Date.now() - Sync.last > 30000) Sync.pull();
+});
+setInterval(() => { if (Sync.on && !document.hidden) Sync.pull(); }, 5 * 60 * 1000);
+addEventListener('online', () => { if (Sync.on) Sync.pull(); });
+})();
+
 /* 取经小英雄 · 主程序（二）：战斗 */
 (function(){
 'use strict';
@@ -3449,7 +3575,7 @@ class Battle {
       if (this.chest) await this.openChest();
       else await this.hitEnemy();
       if (this.done) return;
-      this.i++; await sleep(250); this.next();
+      this.i++; await sleep(120); this.next();
     } else {
       $$('.opt').forEach(b => { if (sel.has(+b.dataset.i)) b.classList.add('bad'); });
       Sfx.play('bad'); this.streak = 0; this.wrongRow++;
@@ -3494,7 +3620,9 @@ class Battle {
     ar.nextDmg = { text: (crit ? '暴击 ' : '') + '-' + d, crit };
     if (label) ar.caption(label);
     Sfx.play(crit || kind === 'heavy' ? 'crit' : 'hit');
-    if (lethal && kind !== 'heavy') { Sfx.play('finish'); await MV.wk_finish.run(ar, ar.L, ar.R); }
+    // 头目用最炫的“如意金箍棒·变”，小怪用跳劈收尾，节奏快一些
+    if (lethal && kind !== 'heavy' && f.boss) { Sfx.play('finish'); await MV.wk_finish.run(ar, ar.L, ar.R); }
+    else if (lethal && kind !== 'heavy') { Sfx.play('finish'); await MV.wk_normal.run(ar, ar.L, ar.R); }
     else await (kind === 'heavy' ? MV.wk_heavy : MV.wk_normal).run(ar, ar.L, ar.R);
     f.hp = Math.max(0, f.hp - d); this.renderHP();
     if (label) ar.caption('');
@@ -3561,17 +3689,17 @@ class Battle {
       await an(ar.R.mover, [{ transform: 'none' }, { transform: 'translateY(-40px) scale(1.1)', offset: .3 }, { transform: `translateX(${ar.R.dir * 280}px) scale(.6)`, opacity: 0 }], 1200, { easing: 'ease-in-out' });
       if (this.mode === 'story' && !(Store.state.allies || []).includes(f.k)) { Store.state.allies.push(f.k); this.loot.push({ ally: f.k }); }
     } else {
-      await ar.capture(ar.R, { key: f.k, beast: E.yx || null, owner: E.owner || null, text: E.end || '逃走了' }, C);
+      await ar.capture(ar.R, { key: f.k, beast: E.yx || null, owner: E.owner || null, text: E.end || '逃走了', quick: !f.boss && !E.owner }, C);
       Sfx.play('win');
     }
-    await sleep(f.boss ? 1600 : 900);
+    await sleep(f.boss ? 1600 : 150);
     if (f.boss) this.rollBoss(f.k); else this.rollMob();
     // 下一个妖怪
     if (!this.live) return;
     if (this.fi < this.foes.length - 1) {
       this.fi++; ar.caption(''); ar.put(ar.L, Gear.wukong());
-      ar.put(ar.R, enemySvg(this.foe.k)); await ar.enter(ar.R);
-      ar.caption(this.foe.boss ? `头目 ${name(this.foe.k)} 出现了！` : `${name(this.foe.k)} 冲了过来！`); await sleep(1200); ar.caption('');
+      ar.put(ar.R, enemySvg(this.foe.k)); if (this.foe.boss) await ar.enter(ar.R); else ar.enter(ar.R);
+      ar.caption(this.foe.boss ? `头目 ${name(this.foe.k)} 出现了！` : `${name(this.foe.k)} 冲了过来！`); if (this.foe.boss) await sleep(900); this.capT(this.foe.boss ? 900 : 1600);
       this.renderHP();
     } else { this.renderHP(); }
   }
@@ -4295,7 +4423,7 @@ function parseImport(text) {
 let ptab = 'import', pfilter = { bank: '', subj: '', kp: '', src: '', s: '', page: 0, only: '' }, pending = [];
 function openParent() { show('parent'); renderParent(); }
 function renderParent() {
-  $('#ptabs').innerHTML = [['import', '导入题目'], ['bank', '题库'], ['check', '待核对'], ['report', '学习报告'], ['settings', '设置']].concat(Store.cloud ? [] : [['backup', '备份 / 换设备']]).map(([k, n]) => `<button type="button" role="tab" aria-selected="${ptab === k}" data-t="${k}">${n}</button>`).join('');
+  $('#ptabs').innerHTML = [['import', '导入题目'], ['bank', '题库'], ['check', '待核对'], ['report', '学习报告'], ['settings', '设置']].concat(Store.cloud ? [] : window.QJ_APP === 'parent' ? [['sync', '同步'], ['backup', '备份']] : [['backup', '备份 / 换设备']]).map(([k, n]) => `<button type="button" role="tab" aria-selected="${ptab === k}" data-t="${k}">${n}</button>`).join('');
   const b = $('#pbody');
   if (ptab === 'import') b.innerHTML = importHTML();
   if (ptab === 'bank') b.innerHTML = bankHTML();
@@ -4303,7 +4431,9 @@ function renderParent() {
   if (ptab === 'report') b.innerHTML = reportHTML();
   if (ptab === 'settings') b.innerHTML = settingsHTML();
   if (ptab === 'backup') b.innerHTML = backupHTML();
-  $('#p-status').textContent = Store.cloud ? `云端同步 · 题库 ${Bank.all.length} 道` : `仅本机保存 · 题库 ${Bank.all.length} 道`;
+  if (ptab === 'sync') b.innerHTML = syncHTML();
+  const SY = Q.Sync;
+  $('#p-status').textContent = Store.cloud ? `云端同步 · 题库 ${Bank.all.length} 道` : SY && SY.on ? `${SY.err ? '同步出错：' + SY.err : SY.last ? '已同步' : '同步中……'}${SY.kidAt ? ' · 孩子上次练习 ' + new Date(SY.kidAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''} · 题库 ${Bank.all.length} 道` : `未开同步 · 题库 ${Bank.all.length} 道`;
 }
 function importHTML() {
   return `<div class="pcard"><h3>第一步：让 AI 出题</h3><p>把错题拍照发给任意一个 AI（也可以发给 Claude），再附上下面这段要求，AI 就会按这个格式出同类题。</p><pre class="tpl" id="tpl">${esc(TPL)}</pre><button type="button" class="mini-btn pri" id="copy-tpl" style="justify-self:start">复制这段要求</button></div>
@@ -4369,6 +4499,15 @@ function backupHTML() {
     <p style="color:var(--mute)">在电脑上加好的题，导出“只含题目”的文件，用微信/隔空投送发到 iPad，再在 iPad 的家长端点“导入备份文件”，题就过去了，孩子的进度不受影响。</p></div>
   <div class="pcard"><h3>导入</h3><div class="row"><label class="mini-btn" style="cursor:pointer">选择备份文件<input type="file" id="bk-file" accept=".json,application/json" hidden></label><span id="bk-msg"></span></div><p style="color:var(--mute)">文件里有进度，就会用文件里的进度替换这台设备上的进度；文件里的题会合并进来（同一道题保留较新的版本）。</p></div>`;
 }
+function syncHTML() {
+  const SY = Q.Sync;
+  return `<div class="pcard"><h3>云同步</h3><p>打开后：在这里加的题、改的设置会自动同步到孩子的 iPad；孩子的进度会传回来，“学习报告”里就能看到。数据存在你自己的私有 GitHub 仓库里。</p>
+    <div class="row"><label>数据仓库 <input type="text" id="sy-repo" value="${esc(SY.repo)}" style="max-width:16em"></label></div>
+    <div class="row"><label style="flex:1">同步码（GitHub 令牌） <input type="password" id="sy-token" value="${esc(SY.token)}" placeholder="github_pat_……" style="width:100%"></label></div>
+    <div class="row"><button type="button" class="mini-btn pri" id="sy-save">保存并测试</button><button type="button" class="mini-btn" id="sy-now" ${SY.on ? '' : 'disabled'}>立刻同步</button><span id="sy-msg">${SY.on ? (SY.err ? '<span class="note-bad">' + esc(SY.err) + '</span>' : SY.last ? '上次同步：' + new Date(SY.last).toLocaleTimeString('zh-CN') : '') : '还没打开'}</span></div></div>
+  <div class="pcard"><h3>孩子的 iPad 怎么设置</h3><p>在 iPad 上第一次打开游戏时，会出现“家长设置：同步码”的框，把同一个同步码粘贴进去就好（可以用微信、备忘录或隔空投送发到 iPad）。以后孩子那边看不到任何家长入口。</p>
+    <p style="color:var(--mute)">如果当时点了“跳过”，之后要补设置：在游戏首页的“取经小英雄”标题上长按 3 秒，会再次弹出这个框。</p></div>`;
+}
 function download(name, data) {
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' }); const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -4411,8 +4550,10 @@ document.addEventListener('click', async e => {
     const btn = e.target.closest('#imp-save'); btn.disabled = true; let n = 0;
     const selB = $('#imp-bank').value, nb = $('#imp-newbank').value.trim(); const bankName = selB === '__new' ? nb : selB;
     if (!bankName) { btn.disabled = false; return toast('请填写新题库的名字'); }
-    try { for (const [i, q] of pending.entries()) { q.bank = q.bank || bankName; q.id = 'u' + Date.now().toString(36) + i; if (q.src === '错题') q.wrongMark = Date.now(); await Store.putQuestion(q); n++; } toast(`已加入 ${n} 道题`); pending = []; $('#imp-text').value = ''; $('#imp-preview').innerHTML = ''; renderParent(); }
-    catch (er) { toast('保存失败：' + (er.code || er.message)); btn.disabled = false; }
+    const SY = Q.Sync; if (SY && SY.on) SY.batch = [];
+    try { for (const [i, q] of pending.entries()) { q.bank = q.bank || bankName; q.id = 'u' + Date.now().toString(36) + i; if (q.src === '错题') q.wrongMark = Date.now(); await Store.putQuestion(q); n++; }
+      if (SY && SY.batch) { const list = SY.batch; SY.batch = null; try { await SY.pushQuestions(list); toast(`已加入 ${n} 道题，已同步到 iPad`); } catch (er) { toast(`已加入 ${n} 道题，但没同步上去：${er.message}`, 4000); } } else toast(`已加入 ${n} 道题`); pending = []; $('#imp-text').value = ''; $('#imp-preview').innerHTML = ''; renderParent(); }
+    catch (er) { if (SY) SY.batch = null; toast('保存失败：' + (er.code || er.message)); btn.disabled = false; }
     return;
   }
   const ed = e.target.closest('[data-edit]'); if (ed) return editModal(Bank.byId[ed.dataset.edit]);
@@ -4423,10 +4564,13 @@ document.addEventListener('click', async e => {
   const stamp = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; };
   if (e.target.closest('#bk-all')) { download(`qujing-backup-${stamp()}.json`, Store.backup()); toast('已导出'); return; }
   if (e.target.closest('#bk-q')) { const d = Store.backup(); delete d.state; delete d.progress; delete d.settings; download(`qujing-questions-${stamp()}.json`, d); toast('已导出'); return; }
+  if (e.target.closest('#sy-save')) { const SY = Q.Sync; SY.configure($('#sy-token').value, $('#sy-repo').value); $('#sy-msg').textContent = '测试中……';
+    try { await SY.test(); await SY.pull(); toast('同步已打开'); Bank.rebuild(); renderParent(); } catch (er) { $('#sy-msg').innerHTML = '<span class="note-bad">' + esc(er.message) + '</span>'; } return; }
+  if (e.target.closest('#sy-now')) { await Q.Sync.pull(); Bank.rebuild(); renderParent(); toast(Q.Sync.err ? '同步出错：' + Q.Sync.err : '已同步'); return; }
   if (e.target.closest('#pg-prev')) { pfilter.page--; renderParent(); } if (e.target.closest('#pg-next')) { pfilter.page++; renderParent(); }
   const sb = e.target.closest('[data-sb]'); if (sb) { const s = Store.settings, k = sb.dataset.sb; s.banks = (s.banks || []).includes(k) ? s.banks.filter(x => x !== k) : (s.banks || []).concat(k); Store.save('settings'); renderParent(); return; }
   const fk = e.target.closest('[data-fk]'); if (fk) { const s = Store.settings, k = fk.dataset.fk; s.focusKp = s.focusKp.includes(k) ? s.focusKp.filter(x => x !== k) : s.focusKp.concat(k); Store.save('settings'); renderParent(); }
-  if (e.target.closest('#s-reset')) { if ($('#s-reset-in').value.trim() !== '重置') return toast('请先输入“重置”两个字'); Store.state = JSON.parse(JSON.stringify(window.QJ_DEF_STATE)); Store.prog = { q: {}, ts: 0 }; Store.save('state'); Store.save('progress'); toast('进度已清空'); renderParent(); }
+  if (e.target.closest('#s-reset')) { if ($('#s-reset-in').value.trim() !== '重置') return toast('请先输入“重置”两个字'); Store.state = JSON.parse(JSON.stringify(window.QJ_DEF_STATE)); Store.prog = { q: {}, ts: 0 }; Store.save('state'); Store.save('progress'); if (Q.Sync && Q.Sync.on && window.QJ_APP === 'parent') { Q.Sync.pushReset().then(() => toast('已通知孩子的 iPad 清空进度（下次联网打开时生效）', 4000)).catch(er => toast('没同步上去：' + er.message)); } else toast('进度已清空'); renderParent(); }
 });
 document.addEventListener('change', e => {
   if (!$('#parent').classList.contains('on')) return;
@@ -4446,6 +4590,7 @@ document.addEventListener('input', e => { if (e.target.id === 's-daily') $('#s-d
 // ---------- 家长入口：长按 1.2 秒 ----------
 (function () {
   const b = $('#parent-btn'); let t = null;
+  if (window.QJ_APP === 'kid') { b.remove(); return; }
   // 独立网页版：家长端是单独的页面（parent.html），孩子这边只留一个长按入口
   const go = () => { if (window.QJ_APP === 'kid') { ['state', 'progress', 'settings'].forEach(n => { if (Store.dirty[n]) { clearTimeout(Store.timers[n]); Store.flush(n); } }); location.href = 'parent.html'; } else openParent(); };
   const start = e => { e.preventDefault(); const f = b.querySelector('.fill'); f.style.transition = 'transform 1.2s linear'; f.style.transform = 'scaleX(1)'; t = setTimeout(() => { cancel(); go(); }, 1200); };
@@ -4461,15 +4606,35 @@ document.addEventListener('input', e => { if (e.target.id === 's-daily') $('#s-d
   Bank.rebuild();
   Store.onBank.push(() => { Bank.rebuild(); if ($('#home').classList.contains('on')) goHome(); if ($('#parent').classList.contains('on') && !$('#modal:not([hidden])')) renderParent(); });
   Store.onRemote.push(name => { if (window.QJ_APP === 'parent') { if (!$('#modal:not([hidden])')) renderParent(); return; } if (!Q.curBattle || Q.curBattle.done) { if ($('#home').classList.contains('on')) goHome(); } });
+  const SY = Q.Sync;
+  if (SY && SY.on) { await Promise.race([SY.pull(), Q.sleep(5000)]); Bank.rebuild(); }
+  if (SY) SY.onStatus.push(() => { if (window.QJ_APP === 'parent' && $('#parent').classList.contains('on') && !$('#modal:not([hidden])')) renderParent(); });
   if (Store.cloud) { const t0 = Date.now(); while (!Store.bankReady && Date.now() - t0 < 6000) await Q.sleep(100); Bank.rebuild(); }
   $('#boot').hidden = true;
   if (window.QJ_APP === 'parent') {
     document.body.classList.add('parent-app');
     const back = $('#parent .back'); back.textContent = '← 回到游戏'; back.removeAttribute('data-home-btn'); back.onclick = () => { ['state', 'progress', 'settings'].forEach(n => { if (Store.dirty[n]) { clearTimeout(Store.timers[n]); Store.flush(n); } }); location.href = './'; };
+    if (!(SY && SY.on)) ptab = 'sync';
     openParent();
-  } else goHome();
+  } else { goHome(); if (window.QJ_APP === 'kid') kidSetup(); }
   document.addEventListener('pointerdown', () => Sfx.ensure(), { once: true });
   addEventListener('visibilitychange', () => { if (document.hidden) ['state', 'progress', 'settings'].forEach(n => { if (Store.dirty[n]) { clearTimeout(Store.timers[n]); Store.flush(n); } }); });
+})();
+// ---------- 孩子端：第一次打开时，家长粘贴同步码 ----------
+function kidSetup(force) {
+  const SY = Q.Sync; if (!SY || (!force && (SY.on || Store.ls('sync_skip')))) return;
+  const m = $('#modal'); m.hidden = false;
+  $('#modal .mbox').innerHTML = `<h2>家长设置：同步码</h2><p>粘贴家长中心“同步”页里的同步码，孩子的进度就会同步给家长，家长新加的题也会自动出现。</p>
+    <input type="password" id="ks-token" placeholder="github_pat_……" style="width:100%"><p id="ks-msg" class="note-bad"></p>
+    <div class="row"><button type="button" class="btn ghost" id="ks-skip">跳过</button><button type="button" class="btn" id="ks-ok">保存</button></div>`;
+  $('#ks-skip').onclick = () => { Store.ls('sync_skip', 1); m.hidden = true; };
+  $('#ks-ok').onclick = async () => { const tok = $('#ks-token').value.trim(); if (!tok) return; SY.configure(tok); $('#ks-msg').textContent = '测试中……';
+    try { await SY.test(); await SY.pull(); Bank.rebuild(); SY.pushKid(0); m.hidden = true; toast('同步已打开'); goHome(); } catch (er) { SY.configure(''); $('#ks-msg').textContent = er.message; } };
+}
+(function () {
+  const t = $('.home-title'); if (!t) return; let h = null;
+  t.addEventListener('pointerdown', () => { if (window.QJ_APP !== 'kid') return; h = setTimeout(() => kidSetup(true), 3000); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => t.addEventListener(ev, () => clearTimeout(h)));
 })();
 window.QJ.openParent = openParent;
 })();
