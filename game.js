@@ -3889,7 +3889,8 @@ class Battle {
     if (this.done || !this.live) return;
     const ar = this.ar;
     if (this.mode !== 'free' && this.hp <= 0) return;
-    this.busy = true; $('#bt-q').innerHTML = '';
+    // 换题、换妖怪的过渡里题目先清掉，但连对火焰留在原地
+    { this.busy = true; const st = this.streak >= 2 && $('#bt-q .streak:not(.out)'); $('#bt-q').innerHTML = st ? '<div class="qtags"></div>' : ''; if (st) { st.classList.remove('pop'); $('#bt-q .qtags').appendChild(st); } }
     if (this.mode !== 'free' && this.foes.every(f => f.hp <= 0)) {
       if (this.i >= this.q.length) { if (this.chest) await this.chestFinale(); if (!this.live) return; return this.finish('win'); }
       if (!this.chest) {
