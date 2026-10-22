@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>取经小英雄</title>
+<meta name="theme-color" content="#2f7d6b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="取经小英雄">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="style.css?v=676562c723">
+<style>html,body{margin:0;height:100%;background:#2f3b36;overscroll-behavior:none}body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}body.parent-app{-webkit-user-select:auto;user-select:auto}input,textarea{-webkit-user-select:text;user-select:text}</style>
+</head>
+<body>
+<div class="app" id="app">
+  <section class="screen on" id="home">
+    <div class="home-top pad"><div class="home-title">取经小英雄</div><div class="row"><span class="pill" id="home-gold"></span></div></div>
+    <div class="home-main pad"><div class="hero"><div id="home-hero"></div><div class="rank" id="home-rank"></div></div><div class="modes" id="home-modes"></div></div>
+    <div class="home-foot pad"><small id="cloud-note" style="color:#fff;align-self:center"></small><button type="button" class="parentbtn" id="parent-btn"><span class="fill"></span>家长（长按）</button></div>
+  </section>
+  <section class="screen" id="map">
+    <div class="topbar pad"><button type="button" class="back" data-home-btn>← 花果山</button><h2>取经之路</h2></div>
+    <div class="scroll pad" id="map-list"></div>
+  </section>
+  <section class="screen" id="intro"><div class="intro-box" id="intro-box"></div></section>
+  <section class="screen" id="battle">
+    <div class="bt-top pad"><button type="button" class="back" id="bt-back">← 离开</button><div class="stg" id="bt-title"></div><span class="pill" id="bt-prog"></span><span class="pill" id="bt-gold"></span></div>
+    <div class="arena" id="bt-arena"><div class="hill"></div><div class="gnd"></div>
+      <div class="slot L"><div class="mover"><div class="flip"></div></div></div><div class="slot R"><div class="mover"><div class="flip"></div></div></div>
+      <div class="fx"></div><div class="capbar" aria-live="polite"></div><div class="hpbox L" id="hp-L"></div><div class="hpbox R" id="hp-R"></div></div>
+    <div class="qpanel pad" id="bt-q"></div>
+    <div class="skills pad" id="bt-skills"></div>
+  </section>
+  <section class="screen" id="result"><div class="res-box" id="result-box"></div></section>
+  <section class="screen page" id="bag">
+    <div class="topbar pad"><button type="button" class="back" data-home-btn>← 花果山</button><h2>装备</h2><span class="pill" id="bag-spirit"></span></div>
+    <div class="scroll pad"><div class="bag"><div class="bag-left"><div class="bag-stage" id="bag-stage"></div><table class="stats" id="bag-stats"></table><div id="bag-sets" style="display:grid;gap:6px"></div></div>
+      <div><div class="tabs" id="bag-tabs" role="tablist"></div><div class="items" id="bag-items"></div></div></div></div>
+  </section>
+  <section class="screen page" id="codex">
+    <div class="topbar pad"><button type="button" class="back" data-home-btn>← 花果山</button><h2>影神图</h2><span class="pill" id="codex-count"></span></div>
+    <div class="scroll pad"><div class="grid" id="codex-grid"></div></div>
+  </section>
+  <section class="screen page" id="cards">
+    <div class="topbar pad"><button type="button" class="back" data-home-btn>← 花果山</button><h2>援军卡</h2></div>
+    <div class="scroll pad"><p style="margin:0 0 10px">打败 Boss、复习错题时会掉神仙碎片。同一位神仙攒够 3 个碎片，就得到 3 次召唤。</p><div class="grid" id="cards-grid"></div></div>
+  </section>
+  <section class="screen page" id="shop">
+    <div class="topbar pad"><button type="button" class="back" data-home-btn>← 花果山</button><h2>土地庙小铺</h2><span class="pill" id="shop-gold"></span></div>
+    <div class="scroll pad" id="shop-body"></div>
+  </section>
+  <section class="screen page" id="free">
+    <div class="topbar pad"><button type="button" class="back" data-home-btn>← 花果山</button><h2>自由修行</h2></div>
+    <div class="scroll pad" id="free-body"></div>
+  </section>
+  <section class="screen page" id="race">
+    <div class="topbar pad"><button type="button" class="back" data-home-btn>← 花果山</button><h2>筋斗云竞速</h2></div>
+    <div class="scroll pad" id="race-body" style="display:flex;flex-direction:column;gap:12px;padding-bottom:16px"></div>
+  </section>
+  <section class="screen" id="duel">
+    <div class="bt-top pad"><button type="button" class="back" data-home-btn>← 结束</button><div class="stg">擂台斗法</div></div>
+    <div class="arena duel-arena" id="duel-arena"><div class="hill"></div><div class="gnd"></div><div class="slot L"><div class="mover"><div class="flip"></div></div></div><div class="slot R"><div class="mover"><div class="flip"></div></div></div><div class="fx"></div><div class="capbar"></div></div>
+    <div class="duel-mid" id="duel-mid"></div>
+    <div class="duel-wrap" id="duel-wrap"><div class="side p1" id="duel-p1"></div><div class="side p2" id="duel-p2"></div></div>
+  </section>
+  <section class="screen" id="parent">
+    <div class="topbar pad"><button type="button" class="back" data-home-btn>← 返回游戏</button><h2>家长中心</h2><small id="p-status" style="color:var(--mute)"></small></div>
+    <div class="ptabs pad" id="ptabs" role="tablist"></div>
+    <div class="scroll pad"><div class="pbody" id="pbody"></div></div>
+  </section>
+  <div class="modal" id="modal" hidden><div class="mbox"></div></div>
+  <div class="toast" id="toast" hidden></div>
+  <div class="modal" id="boot" hidden><div class="empty"><h2>正在打开取经路……</h2><p>正在读取题库和进度</p></div></div>
+</div>
+
+<script>window.QJ_APP = 'kid'; window.QJ_BANK_URL = 'bank.json?v=676562c723';</script>
+<script src="game.js?v=676562c723"></script>
+<script>
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').then(r => {
+  r.addEventListener('updatefound', () => { const w = r.installing; w && w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller && window.QJ && QJ.toast) QJ.toast('游戏有更新，下次打开就是新版本', 3500); }); });
+}).catch(() => {}));
+</script>
+</body>
+</html>
