@@ -145,6 +145,8 @@ h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance}
 .skills{display:flex;gap:8px;align-items:stretch;padding-block:8px max(8px,env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid var(--line);overflow-x:auto;flex:none}
 .sk{flex:none;border:2px solid var(--line);background:var(--paper);border-radius:14px;padding:4px 8px;min-width:68px;display:flex;flex-direction:column;align-items:center;gap:0;font-size:12.5px;font-weight:700;position:relative}
 .sk svg{width:34px;height:34px;overflow:visible}
+.sk .sd,.focus .sd{display:block;font-size:10.5px;font-weight:500;color:var(--mute);line-height:1.15;white-space:nowrap}
+.focus button .sd{color:inherit;opacity:.8}
 .sk .n{position:absolute;top:-6px;right:-6px;background:var(--cin);color:#fff;border-radius:99px;font-size:11px;min-width:20px;height:20px;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .sk[disabled]{opacity:.35;pointer-events:none}
 .sk.armed{border-color:var(--gold);background:var(--gold2);box-shadow:0 0 0 3px rgba(232,179,58,.4)}

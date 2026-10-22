@@ -1390,7 +1390,14 @@ class Fighter {
   part(sel) { return this.svg && this.svg.querySelector(sel); }
   parts(sel) { return this.svg ? [...this.svg.querySelectorAll(sel)] : []; }
   mouth(ms = 600) { const v = this.svg; if (!v) return; v.classList.add('mouthy'); setTimeout(() => v.classList.remove('mouthy'), ms); }
-  reset() { clear(this.mover, this.flip, this.actor, ...this.weapons, ...(this.svg ? this.svg.querySelectorAll('.tail,.dog,.tower,.eye3,.bag,.sleeveR,.palm,.trunk,.wing,.cymbal,.sway,.robe-eyes,.gourd,.zhuo,.bells') : [])); }
+  // 归位：把角色搬进全新的容器，彻底甩掉任何残留的位移（iPad Safari 偶尔会留住动画终点）
+  fresh() {
+    const m = document.createElement('div'), fl = document.createElement('div'); m.className = 'mover'; fl.className = 'flip';
+    while (this.flip.firstChild) fl.appendChild(this.flip.firstChild);
+    m.appendChild(fl); this.mover.replaceWith(m); this.mover = m; this.flip = fl; this._t = null;
+    if (this.svg) this.svg.querySelectorAll('.weapon,.actor').forEach(el => { el.getAnimations().forEach(a => { if (!(window.CSSAnimation && a instanceof CSSAnimation)) a.cancel(); }); el.style.transform = ''; el._r = 0; });
+  }
+  reset() { if (this.mover) this.mover.style.transform = ''; this._t = null; clear(this.mover, this.flip, this.actor, ...this.weapons, ...(this.svg ? this.svg.querySelectorAll('.tail,.dog,.tower,.eye3,.bag,.sleeveR,.palm,.trunk,.wing,.cymbal,.sway,.robe-eyes,.gourd,.zhuo,.bells') : [])); }
 }
 
 class Arena {
@@ -1648,18 +1655,20 @@ window.QJ_FX = { Arena, Fighter, an, clear, sleep, rnd };
 (function(){
 const { an, clear, sleep, rnd } = window.QJ_FX;
 const T = (f, dx, dy = 0, extra = '') => `translate(${dx * f.dir}px,${dy}px) ${extra}`;
+// 位移动画结束后，把终点写进内联样式再取消动画：不同浏览器（尤其 iPad Safari）对“动画停在终点”的处理不一样，这样最稳
 function go(f, t, dur, o = {}) {
   const from = f._t || 'translate(0px,0px)'; f._t = t;
   const kf = [{ transform: from }]; if (o.mid) kf.push({ transform: o.mid }); kf.push({ transform: t });
-  return an(f.mover, kf, dur, { easing: o.ease || 'ease-out' });
+  const el = f.mover;
+  return an(el, kf, dur, { easing: o.ease || 'ease-out' }).then(a => { if (f._t === t && el === f.mover) el.style.transform = t; if (a && a.cancel) a.cancel(); return a; });
 }
-async function home(f, dur = 320) { await go(f, 'translate(0px,0px)', dur, { ease: 'ease-in-out' }); clear(f.mover); f._t = null; }
+async function home(f, dur = 320) { await go(f, 'translate(0px,0px)', dur, { ease: 'ease-in-out' }); clear(f.mover); f.mover.style.transform = ''; f._t = null; }
 function rot(el, list, dur, ease = 'ease-out') {
   if (!el) return Promise.resolve();
-  const from = el._r || 0; el._r = list[list.length - 1];
-  return an(el, [from, ...list].map(d => ({ transform: `rotate(${d}deg)` })), dur, { easing: ease });
+  const from = el._r || 0, to = list[list.length - 1]; el._r = to;
+  return an(el, [from, ...list].map(d => ({ transform: `rotate(${d}deg)` })), dur, { easing: ease }).then(a => { if (el._r === to) el.style.transform = `rotate(${to}deg)`; if (a && a.cancel) a.cancel(); return a; });
 }
-async function rotHome(el, dur = 260) { if (!el) return; await rot(el, [0], dur, 'ease-in-out'); clear(el); el._r = 0; }
+async function rotHome(el, dur = 260) { if (!el) return; await rot(el, [0], dur, 'ease-in-out'); clear(el); el.style.transform = ''; el._r = 0; }
 const near = (ar, A, D, keep = 125) => Math.max(0, Math.abs(ar.gap(A, D)) - keep * ar.s);
 const svgs = {
   palm: `<svg viewBox="0 0 120 140" overflow="visible"><path d="M20 140 L20 70 Q20 58 30 58 Q38 58 38 70 L38 30 Q38 18 48 18 Q58 18 58 30 L58 20 Q58 8 68 8 Q78 8 78 20 L78 30 Q78 20 88 20 Q98 22 98 34 L98 60 Q98 50 106 52 Q116 56 112 72 L100 116 Q92 140 60 140 Z" fill="#f6d58a" stroke="#3a2618" stroke-width="4" stroke-linejoin="round"/><path d="M48 100 q12 8 26 0" fill="none" stroke="#c9a24a" stroke-width="3"/></svg>`,
@@ -3483,19 +3492,19 @@ class Battle {
   renderSkills() {
     if (!this.live) return;
     const s = this.sk, b = this.busy || this.done;
-    const btn = (k, label, icon, n, title) => `<button type="button" class="sk${this.flags[k + 'Armed'] ? ' armed' : ''}" data-k="${k}" ${!n || b ? 'disabled' : ''} aria-label="${title}">${icon}<span>${label}</span>${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
+    const btn = (k, label, icon, n, title) => `<button type="button" class="sk${this.flags[k + 'Armed'] ? ' armed' : ''}" data-k="${k}" ${!n || b ? 'disabled' : ''} aria-label="${label}：${title}">${icon}<span>${label}</span><small class="sd">${title}</small>${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
     const segs = Array.from({ length: 4 }, (_, i) => `<i class="${i < this.focus ? 'on' : ''}"></i>`).join('');
     const hv = this.focus >= 4 && !b && !this.chest && !this.rEmpty && (this.miniKey || (this.foe && this.foe.hp > 0));
-    let h = this.mode === 'free' ? '' : `<div class="focus"><div class="segs">${segs}</div><button type="button" data-k="heavy" class="${hv ? 'ready' : ''}" ${hv ? '' : 'disabled'} title="${this.chest ? '开宝箱的时候不能用重棍' : ''}">重棍</button></div>`;
-    h += btn('eye', '火眼金睛', ICON.eye, s.eye, '看提示');
-    h += btn('ding', '定身术', ICON.ding, s.ding, '答错可以再选一次');
+    let h = this.mode === 'free' ? '' : `<div class="focus"><div class="segs">${segs}</div><button type="button" data-k="heavy" class="${hv ? 'ready' : ''}" ${hv ? '' : 'disabled'} title="${this.chest ? '开宝箱的时候不能用重棍' : ''}">重棍<small class="sd">${this.focus >= 4 ? '狠狠打一下' : '连续答对攒满 4 格'}</small></button></div>`;
+    h += btn('eye', '火眼金睛', ICON.eye, s.eye, '看一条提示');
+    h += btn('ding', '定身术', ICON.ding, s.ding, '答错能再选一次');
     if (this.mode !== 'free') {
-      h += btn('gourd', '喝葫芦', ICON.gourd, s.gourd, '回复气血');
-      if (s.bajie != null && (Store.state.allies || []).includes('bajie')) h += btn('bajie', '钉耙一扫', allyIcon('bajie'), s.bajie, '去掉一个错误选项');
-      if ((Store.state.allies || []).includes('shaseng')) h += btn('shaseng', '宝杖助阵', allyIcon('shaseng'), s.shaseng, '这题伤害翻倍');
-      if ((Store.state.allies || []).includes('bailong')) h += btn('bailong', '白龙冲撞', allyIcon('bailong'), s.bailong, '直接攻击一次');
+      h += btn('gourd', '喝葫芦', ICON.gourd, s.gourd, '加血');
+      if (s.bajie != null && (Store.state.allies || []).includes('bajie')) h += btn('bajie', '钉耙一扫', allyIcon('bajie'), s.bajie, '去掉一个错的');
+      if ((Store.state.allies || []).includes('shaseng')) h += btn('shaseng', '宝杖助阵', allyIcon('shaseng'), s.shaseng, '这题打两倍');
+      if ((Store.state.allies || []).includes('bailong')) h += btn('bailong', '白龙冲撞', allyIcon('bailong'), s.bailong, '直接打一下');
       const nCards = Object.values(Store.state.cards || {}).filter(v => v > 0).length;
-      if (nCards) h += btn('card', '援军卡', ICON.card, s.card, '召唤神仙');
+      if (nCards) h += btn('card', '援军卡', ICON.card, s.card, '请神仙帮忙');
     }
     $('#bt-skills').innerHTML = h;
   }
@@ -3624,16 +3633,17 @@ class Battle {
     if (lethal && kind !== 'heavy' && f.boss) { Sfx.play('finish'); await MV.wk_finish.run(ar, ar.L, ar.R); }
     else if (lethal && kind !== 'heavy') { Sfx.play('finish'); await MV.wk_normal.run(ar, ar.L, ar.R); }
     else await (kind === 'heavy' ? MV.wk_heavy : MV.wk_normal).run(ar, ar.L, ar.R);
+    ar.L.fresh();
     f.hp = Math.max(0, f.hp - d); this.renderHP();
     if (label) ar.caption('');
     if (f.hp <= 0) await this.defeat();
   }
   async hitEnemy() {
     const ar = this.ar;
-    if (this.mode === 'free') { ar.nextDmg = { text: '好！', crit: false }; Sfx.play('hit'); await MV.wk_normal.run(ar, ar.L, ar.R); Store.state.gold += 1; return; }
+    if (this.mode === 'free') { ar.nextDmg = { text: '好！', crit: false }; Sfx.play('hit'); await MV.wk_normal.run(ar, ar.L, ar.R); ar.L.fresh(); ar.R.fresh(); Store.state.gold += 1; return; }
     if (this.miniKey) {
       const { d } = this.dmg(1); ar.nextDmg = { text: '-' + d, crit: false }; Sfx.play('hit');
-      await MV.wk_normal.run(ar, ar.L, ar.R);
+      await MV.wk_normal.run(ar, ar.L, ar.R); ar.L.fresh();
       const mk = this.miniKey; await sleep(300);
       ar.caption(`${name(mk)}被打得哇哇叫，慌慌张张跑去给大王报信了！`);
       ar.R.reset(); const fl = ar.R.flip; fl.style.transform = 'scaleX(-1)';
@@ -3654,14 +3664,15 @@ class Battle {
   }
   async enemyHits() {
     const ar = this.ar, k = this.miniKey || (this.foe && this.foe.k); if (!k || !MV[k]) return;
-    const f = this.foe; let atk = this.miniKey ? Math.max(4, Math.round((f ? f.atk : 6) * .6)) : f.atk;
+    const f = this.foe; let atk = this.miniKey ? Math.max(7, Math.round((f ? f.atk : 9) * .7)) : f.atk;
     if (this.st.acc === 'acc_dingfeng' && k === 'huangfeng') atk = Math.round(atk / 2);
-    let d = Math.max(1, atk - (this.tot.def || 0));
+    // 防御最多挡掉一大半，但总会掉血，装备再好也得认真答题
+    let d = Math.max(Math.round(atk * .35), atk - (this.tot.def || 0));
     if (this.st.four.heifeng && !this.flags.heifengUsed) { this.flags.heifengUsed = true; d = 0; ar.caption('黑风护体！这一下不疼'); }
     ar.nextDmg = { text: d ? '-' + d : '挡住了', crit: false };
     Sfx.play('hurt');
     await MV[k].run(ar, ar.R, ar.L);
-    ar.L.reset(); ar.R.reset();
+    ar.L.fresh(); ar.R.fresh();
     this.hp = Math.max(0, this.hp - d); this.renderHP(); ar.caption('');
     if (this.hp <= 0) await this.knockout();
   }
@@ -3739,7 +3750,7 @@ class Battle {
     this.chestGold += 5; if (Math.random() < .2 * this.luck()) { const pool = G.ITEMS.filter(i => i.drop === 'mob' || (i.set && i.set === this.cfg.set)); this.chestItems.push(pick(pool).id); }
     const p = ar.pt(ar.R, 100, 150);
     ar.nextDmg = { text: '咔！', crit: false }; Sfx.play('hit');
-    await MV.wk_normal.run(ar, ar.L, ar.R);
+    await MV.wk_normal.run(ar, ar.L, ar.R); ar.L.fresh();
     if (sv) for (let i = 1; i <= 4; i++) { const c = sv.querySelector('.ck' + i); if (c) c.setAttribute('opacity', i <= lv ? '1' : '0'); }
     const lock = sv && sv.querySelector('.lock');
     if (lock) an(lock, [{ transform: 'none' }, { transform: 'translateX(-5px) rotate(-6deg)' }, { transform: 'translateX(5px) rotate(6deg)' }, { transform: 'none' }], 360, { fill: 'none' });
@@ -3811,7 +3822,7 @@ class Battle {
     this.busy = true; this.renderSkills();
     ar.caption(label); ar.put(ar.L, C[k]()); await ar.enter(ar.L);
     const d = Math.round(this.tot.atk * mult); ar.nextDmg = { text: '-' + d, crit: false };
-    await MV[k].run(ar, ar.L, ar.R);
+    await MV[k].run(ar, ar.L, ar.R); ar.L.fresh(); ar.R.fresh();
     this.foe.hp = Math.max(0, this.foe.hp - d); this.renderHP();
     await an(ar.L.mover, [{ transform: 'none', opacity: 1 }, { transform: `translateX(${-200}px)`, opacity: 0 }], 400);
     ar.put(ar.L, Gear.wukong()); await ar.enter(ar.L); ar.caption('');
@@ -3932,7 +3943,7 @@ function openIntro(st) {
 function foeStats(k, ch, boss, tut) {
   const exp = 10 + 4 * (ch - 1);
   const max = tut && boss ? 40 : Math.round((boss ? 7 : 2.5) * exp);
-  return { k, max, hp: max, atk: boss ? 9 + 2 * ch : 5 + ch, boss };
+  return { k, max, hp: max, atk: tut && boss ? 12 : boss ? 14 + 3 * ch : 9 + 2 * ch, boss };
 }
 // 根据题量决定头目前面有几只小怪：剧情小怪一定出场，不够再从本章小怪里补
 function stageMobs(st, n) {
@@ -4021,7 +4032,7 @@ function demoModal(title, body, playA, playD, extra) {
   ar.put(ar.L, playA === 'wukong' ? Gear.wukong() : C[playA]()); ar.put(ar.R, playD === 'wukong' ? Gear.wukong() : C[playD]());
   let busy = false;
   $('#modal .x').onclick = () => { m.hidden = true; };
-  if ($('#m-play')) $('#m-play').onclick = async () => { if (busy) return; busy = true; try { await MV[playA].run(ar, ar.L, ar.R); } catch (e) { } ar.L.reset(); ar.R.reset(); ar.put(ar.R, playD === 'wukong' ? Gear.wukong() : C[playD]()); busy = false; };
+  if ($('#m-play')) $('#m-play').onclick = async () => { if (busy) return; busy = true; try { await MV[playA].run(ar, ar.L, ar.R); ar.L.fresh(); ar.R.fresh(); } catch (e) { } ar.L.reset(); ar.R.reset(); ar.put(ar.R, playD === 'wukong' ? Gear.wukong() : C[playD]()); busy = false; };
   return ar;
 }
 document.addEventListener('click', e => {
@@ -4183,7 +4194,7 @@ function startDuel() {
     const ord = shuffle(q.opts.map((_, k) => k));
     el.innerHTML = head(p) + `<div class="qtags"><span class="tag">${esc(q.kp)}</span>${q.ans.length > 1 ? '<span class="tag multi">多选</span>' : ''}</div><div class="qtext">${esc(q.q)}</div><div class="opts wide">${ord.map((k, j) => `<button type="button" class="opt" data-i="${k}"><span class="lt">${'ABCDEF'[j]}</span><span>${esc(q.opts[k])}</span></button>`).join('')}</div>${q.ans.length > 1 ? '<button type="button" class="btn gold confirm" data-ok="1">选好了</button>' : ''}`;
   };
-  const anim = async (atkL) => { if (animBusy) return; animBusy = true; try { if (atkL) await MV.wk_normal.run(ar, ar.L, ar.R); else await MV[d.dadAvatar].run(ar, ar.R, ar.L); } catch (e) { } ar.L.reset(); ar.R.reset(); animBusy = false; };
+  const anim = async (atkL) => { if (animBusy) return; animBusy = true; try { if (atkL) await MV.wk_normal.run(ar, ar.L, ar.R); else await MV[d.dadAvatar].run(ar, ar.R, ar.L); } catch (e) { } ar.L.fresh(); ar.R.fresh(); animBusy = false; };
   const judge = async p => {
     const q = p.cur, ok = p.sel.size === q.ans.length && q.ans.every(a => p.sel.has(a)); p.lock = true;
     const el = $('#duel-' + p.id);
