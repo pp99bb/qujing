@@ -14,7 +14,7 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
-<link rel="stylesheet" href="style.css?v=3e76a1c6f4">
+<link rel="stylesheet" href="style.css?v=895f939671">
 <style>html,body{margin:0;height:100%;background:#2f3b36;overscroll-behavior:none}body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}body.parent-app{-webkit-user-select:auto;user-select:auto}input,textarea{-webkit-user-select:text;user-select:text}</style>
 </head>
 <body>
@@ -30,7 +30,7 @@
   </section>
   <section class="screen" id="intro"><div class="intro-box" id="intro-box"></div></section>
   <section class="screen" id="battle">
-    <div class="bt-top pad"><button type="button" class="back" id="bt-back">← 离开</button><div class="stg" id="bt-title"></div><button type="button" class="gearin" data-gear aria-label="声音设置"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm8.4 4.6l1.9 1.5-1.8 3.1-2.3-.8a7.6 7.6 0 0 1-1.9 1.1l-.4 2.4h-3.6l-.4-2.4a7.6 7.6 0 0 1-1.9-1.1l-2.3.8-1.8-3.1 1.9-1.5a7.7 7.7 0 0 1 0-2.2L1.9 9.4l1.8-3.1 2.3.8A7.6 7.6 0 0 1 7.9 6l.4-2.4h3.6l.4 2.4a7.6 7.6 0 0 1 1.9 1.1l2.3-.8 1.8 3.1-1.9 1.5a7.7 7.7 0 0 1 0 2.2z" fill="#fff8dc"/></svg></button><span class="pill" id="bt-prog"></span><span class="pill" id="bt-gold"></span></div>
+    <div class="bt-top pad"><button type="button" class="back" id="bt-back">← 离开</button><div class="stg" id="bt-title"></div><button type="button" class="gearin" data-gear aria-label="设置"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm8.4 4.6l1.9 1.5-1.8 3.1-2.3-.8a7.6 7.6 0 0 1-1.9 1.1l-.4 2.4h-3.6l-.4-2.4a7.6 7.6 0 0 1-1.9-1.1l-2.3.8-1.8-3.1 1.9-1.5a7.7 7.7 0 0 1 0-2.2L1.9 9.4l1.8-3.1 2.3.8A7.6 7.6 0 0 1 7.9 6l.4-2.4h3.6l.4 2.4a7.6 7.6 0 0 1 1.9 1.1l2.3-.8 1.8 3.1-1.9 1.5a7.7 7.7 0 0 1 0 2.2z" fill="#fff8dc"/></svg></button><span class="pill" id="bt-prog"></span><span class="pill" id="bt-gold"></span></div>
     <div class="arena" id="bt-arena"><div class="hill"></div><div class="gnd"></div>
       <div class="slot L"><div class="mover"><div class="flip"></div></div></div><div class="slot R"><div class="mover"><div class="flip"></div></div></div>
       <div class="fx"></div><div class="capbar" aria-live="polite"></div><div class="hpbox L" id="hp-L"></div><div class="hpbox R" id="hp-R"></div></div>
@@ -74,14 +74,14 @@
     <div class="ptabs pad" id="ptabs" role="tablist"></div>
     <div class="scroll pad"><div class="pbody" id="pbody"></div></div>
   </section>
-  <button type="button" class="gearbtn" data-gear aria-label="声音设置"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm8.4 4.6l1.9 1.5-1.8 3.1-2.3-.8a7.6 7.6 0 0 1-1.9 1.1l-.4 2.4h-3.6l-.4-2.4a7.6 7.6 0 0 1-1.9-1.1l-2.3.8-1.8-3.1 1.9-1.5a7.7 7.7 0 0 1 0-2.2L1.9 9.4l1.8-3.1 2.3.8A7.6 7.6 0 0 1 7.9 6l.4-2.4h3.6l.4 2.4a7.6 7.6 0 0 1 1.9 1.1l2.3-.8 1.8 3.1-1.9 1.5a7.7 7.7 0 0 1 0 2.2z" fill="#3a2618"/></svg></button>
+  <button type="button" class="gearbtn" data-gear aria-label="设置"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm8.4 4.6l1.9 1.5-1.8 3.1-2.3-.8a7.6 7.6 0 0 1-1.9 1.1l-.4 2.4h-3.6l-.4-2.4a7.6 7.6 0 0 1-1.9-1.1l-2.3.8-1.8-3.1 1.9-1.5a7.7 7.7 0 0 1 0-2.2L1.9 9.4l1.8-3.1 2.3.8A7.6 7.6 0 0 1 7.9 6l.4-2.4h3.6l.4 2.4a7.6 7.6 0 0 1 1.9 1.1l2.3-.8 1.8 3.1-1.9 1.5a7.7 7.7 0 0 1 0 2.2z" fill="#3a2618"/></svg></button>
   <div class="modal" id="modal" hidden><div class="mbox"></div></div>
   <div class="toast" id="toast" hidden></div>
   <div class="modal" id="boot" hidden><div class="empty"><h2>正在打开取经路……</h2><p>正在读取题库和进度</p></div></div>
 </div>
 
-<script>window.QJ_APP = 'parent'; window.QJ_BANK_URL = 'bank.json?v=3e76a1c6f4';</script>
-<script src="game.js?v=3e76a1c6f4"></script>
+<script>window.QJ_APP = 'parent'; window.QJ_BANK_URL = 'bank.json?v=895f939671';</script>
+<script src="game.js?v=895f939671"></script>
 <script>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').then(r => {
   r.addEventListener('updatefound', () => { const w = r.installing; w && w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller && window.QJ && QJ.toast) QJ.toast('游戏有更新，下次打开就是新版本', 3500); }); });

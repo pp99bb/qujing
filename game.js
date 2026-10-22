@@ -4437,16 +4437,41 @@ document.addEventListener('click', e => {
   demoModal(DATA.GODS[k], `<p>碎片 ${f}/3 · 可用 ${u} 次。攒够 3 个碎片就多 3 次召唤。战斗中点“援军卡”召唤，每场一次，伤害是攻击的 3 倍。</p>`, MV[k] ? k : null, 'heixiong');
 });
 
-// ================= 声音小齿轮（孩子自己调） =================
+// ================= 左下角小齿轮：声音、同步码、重置进度 =================
+function syncBlock() {
+  const SY = Q.Sync; if (!SY || Store.cloud || window.QJ_APP !== 'kid') return '';
+  return SY.on
+    ? `<div class="pcard" style="gap:6px"><b>同步</b><small style="color:var(--mute)">已和家长端同步${SY.last ? '（上次 ' + new Date(SY.last).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) + '）' : ''}。</small><div class="row"><button type="button" class="mini-btn" id="g-unsync">不再同步（改成游客）</button></div></div>`
+    : `<div class="pcard" style="gap:6px"><b>同步码</b><small style="color:var(--mute)">现在是游客模式，进度只存在这台设备上。有同步码的话填在这里：</small>
+        <input type="password" id="g-token" placeholder="github_pat_……" style="width:100%"><div class="row"><button type="button" class="mini-btn pri" id="g-sync">保存同步码</button><span id="g-sync-msg" style="color:var(--mute)"></span></div></div>`;
+}
 document.addEventListener('click', e => {
   if (!e.target.closest('[data-gear]')) return;
   Sfx.ensure(); Sfx.play('click');
   const v = Sfx.vol(), m = $('#modal'); m.hidden = false;
-  $('#modal .mbox').innerHTML = `<button type="button" class="x" aria-label="关闭">×</button><h2>声音</h2>
+  $('#modal .mbox').innerHTML = `<button type="button" class="x" aria-label="关闭">×</button><h2>设置</h2>
     <div class="volrow"><label for="g-music">音乐</label><input type="range" id="g-music" min="0" max="100" value="${Math.round(v.music * 100)}"><b id="g-music-n">${Math.round(v.music * 100)}</b>
     <label for="g-sfx">音效</label><input type="range" id="g-sfx" min="0" max="100" value="${Math.round(v.sfx * 100)}"><b id="g-sfx-n">${Math.round(v.sfx * 100)}</b></div>
+    ${syncBlock()}
+    <div class="pcard" style="gap:6px"><b>重新开始</b><small style="color:var(--mute)">清空修为、灵蕴、装备、通关记录和复习记录。题库不会删。</small>
+      <div class="row"><button type="button" class="mini-btn dng" id="g-reset">重置进度</button><span id="g-reset-msg" style="color:var(--mute)"></span></div></div>
     <div class="row"><button type="button" class="btn" id="g-ok">好了</button></div>`;
-  const close = () => { m.hidden = true; };
+  const close = () => { m.hidden = true; clearTimeout(resetT); };
+  let resetT = null, resetArmed = false;
+  $('#g-reset').onclick = () => {
+    if (!resetArmed) { resetArmed = true; $('#g-reset').textContent = '真的要清空吗？再点一次'; $('#g-reset-msg').textContent = '5 秒内再点一次才会清空'; resetT = setTimeout(() => { resetArmed = false; if ($('#g-reset')) { $('#g-reset').textContent = '重置进度'; $('#g-reset-msg').textContent = ''; } }, 5000); return; }
+    clearTimeout(resetT); const keep = { resetAt: Date.now() };
+    Store.state = Object.assign(JSON.parse(JSON.stringify(window.QJ_DEF_STATE)), keep); Store.prog = { q: {}, ts: 0 };
+    Store.save('state'); Store.save('progress'); ['state', 'progress'].forEach(n => { clearTimeout(Store.timers[n]); Store.flush(n); });
+    toast('进度已清空，重新出发！'); close(); goHome();
+  };
+  if ($('#g-sync')) $('#g-sync').onclick = async () => {
+    const SY = Q.Sync, tok = $('#g-token').value.trim(); if (!tok) return;
+    $('#g-sync-msg').textContent = '测试中……'; SY.configure(tok);
+    try { await SY.test(); await SY.pull(); Bank.rebuild(); SY.pushKid(0); Store.ls('sync_skip', 1); $('#g-sync-msg').textContent = '同步已打开'; toast('同步已打开'); goHome(); }
+    catch (er) { SY.configure(''); $('#g-sync-msg').textContent = er.message; }
+  };
+  if ($('#g-unsync')) $('#g-unsync').onclick = () => { Q.Sync.configure(''); toast('已改成游客模式：以后不再同步'); m.hidden = true; goHome(); };
   $('#modal .x').onclick = close; $('#g-ok').onclick = close;
   $('#g-music').oninput = ev => { $('#g-music-n').textContent = ev.target.value; Sfx.setVol(ev.target.value / 100, null); };
   $('#g-sfx').oninput = ev => { $('#g-sfx-n').textContent = ev.target.value; Sfx.setVol(null, ev.target.value / 100); };
@@ -5032,9 +5057,12 @@ document.addEventListener('input', e => { if (e.target.id === 's-daily') $('#s-d
 function kidSetup(force) {
   const SY = Q.Sync; if (!SY || (!force && (SY.on || Store.ls('sync_skip')))) return;
   const m = $('#modal'); m.hidden = false;
-  $('#modal .mbox').innerHTML = `<h2>家长设置：同步码</h2><p>粘贴家长中心“同步”页里的同步码，孩子的进度就会同步给家长，家长新加的题也会自动出现。</p>
-    <input type="password" id="ks-token" placeholder="github_pat_……" style="width:100%"><p id="ks-msg" class="note-bad"></p>
-    <div class="row"><button type="button" class="btn ghost" id="ks-skip">跳过</button><button type="button" class="btn" id="ks-ok">保存</button></div>`;
+  $('#modal .mbox').innerHTML = `<h2>欢迎来到取经小英雄</h2><p>家里人第一次打开：粘贴家长给的同步码，进度会和家长端同步，家长新加的题也会自动出现。</p>
+    <input type="password" id="ks-token" placeholder="同步码 github_pat_……" style="width:100%"><p id="ks-msg" class="note-bad"></p>
+    <div class="row"><button type="button" class="btn" id="ks-ok">保存同步码</button></div>
+    <hr style="border:none;border-top:1px solid var(--line);margin:4px 0">
+    <p style="margin:0"><b>没有同步码？</b>点下面直接玩。游客的进度只存在这台设备上，和家里的记录没有关系。以后也可以在左下角的小齿轮里再填同步码。</p>
+    <div class="row"><button type="button" class="btn gold" id="ks-skip">我是游客，直接玩</button></div>`;
   $('#ks-skip').onclick = () => { Store.ls('sync_skip', 1); m.hidden = true; };
   $('#ks-ok').onclick = async () => { const tok = $('#ks-token').value.trim(); if (!tok) return; SY.configure(tok); $('#ks-msg').textContent = '测试中……';
     try { await SY.test(); await SY.pull(); Bank.rebuild(); SY.pushKid(0); m.hidden = true; toast('同步已打开'); goHome(); } catch (er) { SY.configure(''); $('#ks-msg').textContent = er.message; } };
@@ -5045,4 +5073,5 @@ function kidSetup(force) {
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => t.addEventListener(ev, () => clearTimeout(h)));
 })();
 window.QJ.openParent = openParent;
+window.QJ.kidSetup = kidSetup;
 })();
