@@ -3511,6 +3511,7 @@ const SRS = {
     const t = today(); const r = Store.prog.q[q.id] || { b: 0, due: t, c: 0, w: 0, t };
     if (ok) { r.c++; r.b = Math.min(5, (r.b || 0) + 1); r.due = t + INT[r.b]; }
     else { r.w++; r.b = 0; r.due = t + 1; }
+    r.ls = Store.prog.sess || 0; r.lok = ok;
     r.t = t; Store.prog.q[q.id] = r; Store.save('progress');
   },
   kpStats(banks) {
@@ -3519,19 +3520,24 @@ const SRS = {
       s.n++; const r = this.rec(q.id); if (r) { s.seen++; if (r.b >= 3) s.mastered++; if (r.w) s.wrong++; s.score += Math.min(1, r.b / 3); } });
     return Object.values(m).map(s => Object.assign(s, { pct: s.n ? Math.round(s.score / s.n * 100) : 0 }));
   },
-  // 组一局题：约 30% 复习、25% 新题，其余用已会的题保证胜率
+  // 答对的题，5 关之内不再出（每次开一关算一关）
+  recentOk(q) { const r = this.rec(q.id); return !!(r && r.lok && (Store.prog.sess || 0) - (r.ls || 0) < 5); },
+  // 组一局题：最多 30% 复习错题，其余尽量出没做过的新题；新题不够再用很久没见的旧题
   pick(n, o = {}) {
+    if (!o.cont) { Store.prog.sess = (Store.prog.sess || 0) + 1; Store.save('progress'); }
     let pool = Bank.active(o.banks).filter(q => !o.subj || q.subj === o.subj).filter(q => !o.kps || !o.kps.length || o.kps.includes(q.kp));
     if (o.only) pool = pool.filter(o.only);
     if (!pool.length) return [];
     const focus = Store.settings.focusKp || [];
+    const recent = pool.filter(q => this.recentOk(q)).sort((x, y) => (this.rec(x.id).ls || 0) - (this.rec(y.id).ls || 0));
+    pool = pool.filter(q => !this.recentOk(q));
     const due = shuffle(pool.filter(q => this.isDue(q))).sort((a, b) => (this.isReview(b) - this.isReview(a)) || ((this.rec(a.id) || {}).due || 0) - ((this.rec(b.id) || {}).due || 0));
     const fresh = shuffle(pool.filter(q => !this.rec(q.id) && !this.isDue(q))).sort((a, b) => (focus.includes(b.kp) - focus.includes(a.kp)) || ((a.d || 1) - (b.d || 1)));
-    const known = shuffle(pool.filter(q => { const r = this.rec(q.id); return r && !this.isDue(q); })).sort((a, b) => (focus.includes(b.kp) - focus.includes(a.kp)));
+    const known = pool.filter(q => { const r = this.rec(q.id); return r && !this.isDue(q); }).sort((a, b) => (focus.includes(b.kp) - focus.includes(a.kp)) || ((this.rec(a.id).ls || 0) - (this.rec(b.id).ls || 0)) || (Math.random() - .5));
     const take = (arr, k, out) => { while (k-- > 0 && arr.length) { const q = arr.shift(); if (!out.includes(q)) out.push(q); } };
     const out = [];
-    take(due, Math.ceil(n * .3), out); take(fresh, Math.ceil(n * .25), out); take(known, n - out.length, out);
-    take(fresh, n - out.length, out); take(due, n - out.length, out);
+    take(due, Math.ceil(n * .3), out); take(fresh, n - out.length, out); take(known, n - out.length, out);
+    take(due, n - out.length, out); take(recent, n - out.length, out);
     // 开头放两道最有把握的题
     const easyFirst = out.slice().sort((a, b) => this.ease(b) - this.ease(a)).slice(0, 2);
     const rest = shuffle(out.filter(q => !easyFirst.includes(q)));
@@ -3900,7 +3906,7 @@ class Battle {
       }
     }
     if (this.i >= this.q.length) {
-      if (this.mode === 'free') { const more = SRS.pick(10, this.cfg.filter || {}); more.forEach(q => this.q.push(q)); if (!more.length) return this.finish('win'); }
+      if (this.mode === 'free') { const more = SRS.pick(10, Object.assign({ cont: true }, this.cfg.filter || {})); more.forEach(q => this.q.push(q)); if (!more.length) return this.finish('win'); }
       else if (this.foe && this.foe.hp > 0 && this.extra < 12) { const q = SRS.easy(this.used) || pick(Bank.all); this.q.push(q); this.used.add(q.id); this.extra++; if (this.extra === 1) toast('妖怪还没倒下，再来几题！'); }
       else return this.finish(this.foes.every(f => f.hp <= 0) ? 'win' : 'escape');
     }
@@ -3980,9 +3986,12 @@ class Battle {
       if (this.mode !== 'free' && !this.chest) await this.enemyHits();
       if (this.done) return;
       // 同考点的变式题 3 题后出现，原题在最后再考一次
-      const v = SRS.variant(q, this.used);
-      if (v) { this.q.splice(Math.min(this.q.length, this.i + 4), 0, v); this.used.add(v.id); }
-      if (first && this.mode !== 'free') this.q.push(q);
+      // 同一道错题在这一关里最多再出 2 次：一道同考点的变式题 + 最后再考一次原题
+      this.rootOf = this.rootOf || new Map(); this.rep = this.rep || {};
+      const root = this.rootOf.get(q.id) || q.id, left = 2 - (this.rep[root] || 0);
+      const v = left > 0 ? SRS.variant(q, this.used) : null;
+      if (v) { this.q.splice(Math.min(this.q.length, this.i + 4), 0, v); this.used.add(v.id); this.rootOf.set(v.id, root); this.rep[root] = (this.rep[root] || 0) + 1; }
+      if (first && this.mode !== 'free' && 2 - (this.rep[root] || 0) > 0) { this.q.push(q); this.rep[root] = (this.rep[root] || 0) + 1; }
       if (this.wrongRow >= 2) { const e = SRS.easy(this.used); if (e) { this.q.splice(this.i + 1, 0, e); this.used.add(e.id); } this.wrongRow = 0; }
       this.explain(q);
     }
@@ -4553,7 +4562,7 @@ function startRace() {
   $('#race-body').innerHTML = `<div class="row" style="justify-content:space-between"><span class="timer" id="r-time">${sec}</span><span class="pill">答对 <b id="r-score">0</b> · 最好 ${S().raceBest}</span></div>
     <div class="race-track"><div class="cloud" id="r-cloud" style="left:0">${Gear.wukong()}</div><div class="flag">灵山</div></div><div id="r-q" class="qpanel"></div>`;
   const draw = () => {
-    if (i >= qs.length) qs = qs.concat(SRS.pick(30));
+    if (i >= qs.length) qs = qs.concat(SRS.pick(30, { cont: true }));
     cur = qs[i++]; const ord = shuffle(cur.opts.map((_, k) => k));
     $('#r-q').innerHTML = `<div class="qtags"><span class="tag subj">${esc(cur.subj)}</span><span class="tag">${esc(cur.kp)}</span>${cur.ans.length > 1 ? '<span class="tag multi">多选</span>' : ''}</div><div class="qtext">${esc(cur.q)}</div>
       <div class="opts${cur.opts.some(o => o.length > 14) ? ' wide' : ''}">${ord.map((k, j) => `<button type="button" class="opt" data-i="${k}"><span class="lt">${'ABCDEF'[j]}</span><span>${esc(cur.opts[k])}</span></button>`).join('')}</div>${cur.ans.length > 1 ? '<button type="button" class="btn gold confirm" id="r-ok">选好了</button>' : ''}`;
