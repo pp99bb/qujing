@@ -4295,7 +4295,7 @@ function parseImport(text) {
 let ptab = 'import', pfilter = { bank: '', subj: '', kp: '', src: '', s: '', page: 0, only: '' }, pending = [];
 function openParent() { show('parent'); renderParent(); }
 function renderParent() {
-  $('#ptabs').innerHTML = [['import', '导入题目'], ['bank', '题库'], ['check', '待核对'], ['report', '学习报告'], ['settings', '设置'], ['backup', '备份 / 换设备']].map(([k, n]) => `<button type="button" role="tab" aria-selected="${ptab === k}" data-t="${k}">${n}</button>`).join('');
+  $('#ptabs').innerHTML = [['import', '导入题目'], ['bank', '题库'], ['check', '待核对'], ['report', '学习报告'], ['settings', '设置']].concat(Store.cloud ? [] : [['backup', '备份 / 换设备']]).map(([k, n]) => `<button type="button" role="tab" aria-selected="${ptab === k}" data-t="${k}">${n}</button>`).join('');
   const b = $('#pbody');
   if (ptab === 'import') b.innerHTML = importHTML();
   if (ptab === 'bank') b.innerHTML = bankHTML();
