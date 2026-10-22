@@ -3770,7 +3770,7 @@ const { C, MV, G, DATA, Arena, an, clear, sleep, rnd, $, $$, esc, today, shuffle
 // ---------- 演武场工具 ----------
 function makeArena(root) {
   const ar = new Arena(root);
-  ar.fit = () => { const w = root.clientWidth, h = root.clientHeight; root.style.setProperty('--s', Math.max(.45, Math.min(1.15, w / 820, (h - 80) / 220)).toFixed(3)); };
+  ar.fit = () => { const w = root.clientWidth, h = root.clientHeight; root.style.setProperty('--s', Math.max(.45, Math.min(1.15, w / (w < 600 ? 540 : 820), (h - 80) / 220)).toFixed(3)); };
   // 换角色时直接换一套新的容器，彻底甩掉上一个招式残留的位移
   ar.put = (f, html) => { f.reset(); const m = document.createElement('div'), fl = document.createElement('div'); m.className = 'mover'; fl.className = 'flip'; m.appendChild(fl); f.mover.replaceWith(m); f.mover = m; f.flip = fl; fl.innerHTML = html; f._t = null; };
   ar.enter = (f, from = 1, dur = 520) => an(f.mover, [{ transform: `translateX(${f.dir * -from * 260}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], dur, { easing: 'cubic-bezier(.3,1.3,.5,1)', fill: 'none' });
@@ -4767,7 +4767,7 @@ async function openMap() {
   const { svg, L, cur } = render();
   box.innerHTML = svg;
   const sv = box.querySelector('svg.wm'), team = sv.querySelector('.wm-team');
-  const fit = () => { const bh = box.clientHeight || 500, h = Math.min(bh, 720), sc = h / H; sv.style.height = h + 'px'; sv.style.width = (L.W * sc) + 'px'; sv.style.marginTop = Math.max(0, (bh - h) / 2) + 'px'; return sc; };
+  const fit = () => { const bh = box.clientHeight || 500, h = Math.min(bh, innerWidth < 600 ? 520 : 720), sc = h / H; sv.style.height = h + 'px'; sv.style.width = (L.W * sc) + 'px'; sv.style.marginTop = Math.max(0, (bh - h) / 2) + 'px'; return sc; };
   let sc = fit();
   let from = S().mapPos; if (from == null || from > cur) from = cur;
   const place = i => { const t = teamAt(L, i); team.setAttribute('transform', `translate(${t.x} ${t.y})`); };

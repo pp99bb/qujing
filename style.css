@@ -337,3 +337,38 @@ body[data-screen="battle"] .gearbtn,body[data-screen="parent"] .gearbtn,body.par
 .volrow{display:grid;grid-template-columns:auto 1fr auto;gap:10px 14px;align-items:center;font-size:18px;font-weight:700}
 .volrow input{width:100%;accent-color:var(--jade);height:28px}
 .volrow b{font-variant-numeric:tabular-nums;min-width:3ch;text-align:right}
+/* ===== 手机竖屏 ===== */
+@media (max-width:520px){
+  .home-top{padding-block:8px}
+  .home-title{font-size:30px}
+  .home-main{gap:10px;padding-bottom:70px}
+  .hero{flex-direction:row;gap:10px;align-items:center}
+  .hero svg{width:110px}
+  .rank{flex:1;padding:8px 12px}.rank b{font-size:18px}
+  .modes{gap:8px}
+  .mode{flex-direction:column;align-items:center;text-align:center;gap:4px;padding:10px 8px;min-height:0;border-radius:16px}
+  .mode .mi{width:52px;height:56px}
+  .mode b{font-size:18px}.mode small{font-size:11.5px}
+  .mode.big{flex-direction:row;text-align:left;gap:10px}.mode.big b{font-size:24px}.mode.big .mi{width:64px;height:70px}
+  .home-foot{position:absolute;right:0;bottom:0}
+  .bt-top{gap:6px;padding-block:4px}
+  .bt-top .stg{font-size:15px}
+  .bt-top .pill{font-size:13px;padding:3px 8px}
+  .bt-top .back{padding:6px 10px;font-size:14px}
+  .bt-top .gearin{width:30px;height:30px}
+  .qpanel{gap:8px;padding-block:8px 4px}
+  .qtext{font-size:19px}
+  .opt{min-height:50px;padding:9px 12px;font-size:17px}
+  .skills{gap:5px;padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}
+  .sk{min-width:0;flex:1 1 0;padding:3px 3px;font-size:11.5px;border-radius:12px}
+  .sk svg{width:26px;height:26px}
+  .sk .sd{font-size:9px;white-space:normal;text-align:center}
+  .sk .n{top:-5px;right:-4px;min-width:17px;height:17px;font-size:10px}
+  .focus{min-width:72px}.focus button{font-size:13px;padding:4px 4px}.focus .sd{font-size:9px;white-space:normal}
+  .streak{font-size:18px;min-width:96px;padding:4px 10px 2px}
+  .streak.t2{font-size:20px}.streak.t3{font-size:22px}.streak.t4{font-size:24px}.streak.t5{font-size:26px}
+  .streak-banner b{font-size:calc(34px * var(--s,1))}
+  .scroll{padding-bottom:70px}
+  .gearbtn{width:40px;height:40px}
+  .intro-box,.res-box{max-height:calc(100% - 20px);overflow-y:auto}
+}
