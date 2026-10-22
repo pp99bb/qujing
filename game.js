@@ -1,3 +1,353 @@
+/* 取经小英雄 · 声音引擎：西游中国风 8-bit
+   全部用 Web Audio 实时合成：掌机方波/三角波 + 模拟笛子、古筝、木鱼、锣、钹。
+   曲谱用简谱写：1-7 是音，' 升八度，, 降八度，- 延长，0 休止。 */
+(function(){
+'use strict';
+const SEMI = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11 };
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+
+const AU = {
+  ctx: null, master: null, musicBus: null, duckBus: null, sfxBus: null,
+  vol: { music: .45, sfx: .8 }, muted: false,
+  _waves: {}, _noise: null, cur: null, curName: '', timer: null,
+
+  init() {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return this.ctx; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+    const c = this.ctx = new AC();
+    this.master = c.createGain(); this.master.gain.value = this.muted ? 0 : 1;
+    const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
+    this.master.connect(comp); comp.connect(c.destination);
+    this.musicBus = c.createGain(); this.duckBus = c.createGain(); this.sfxBus = c.createGain();
+    this.musicBus.connect(this.duckBus); this.duckBus.connect(this.master); this.sfxBus.connect(this.master);
+    this.setVol(this.vol.music, this.vol.sfx);
+    const n = c.sampleRate * 1.5, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    this._noise = b;
+    // iOS：先播一个无声的 buffer 解锁
+    const s = c.createBufferSource(); s.buffer = c.createBuffer(1, 1, 22050); s.connect(c.destination); s.start(0);
+    return c;
+  },
+  setVol(m, s) {
+    if (m != null) this.vol.music = m; if (s != null) this.vol.sfx = s;
+    if (!this.ctx) return; const t = this.ctx.currentTime;
+    this.musicBus.gain.setTargetAtTime(this.vol.music * .85, t, .05);
+    this.sfxBus.gain.setTargetAtTime(this.vol.sfx, t, .05);
+  },
+  setMuted(v) { this.muted = v; if (this.master) this.master.gain.setTargetAtTime(v ? 0 : 1, this.ctx.currentTime, .05); },
+  // 出题时把音乐压低一点
+  duck(on) { if (!this.ctx) return; this.duckBus.gain.setTargetAtTime(on ? .45 : 1, this.ctx.currentTime, .25); },
+
+  // ---------- 基础音色 ----------
+  wave(duty) {
+    if (this._waves[duty]) return this._waves[duty];
+    const N = 64, re = new Float32Array(N), im = new Float32Array(N);
+    for (let k = 1; k < N; k++) im[k] = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * duty);
+    return (this._waves[duty] = this.ctx.createPeriodicWave(re, im));
+  },
+  env(g, t, v, a, d, hold = 0) { g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + a); if (hold) g.gain.setValueAtTime(v, t + a + hold); g.gain.exponentialRampToValueAtTime(0.0001, t + a + hold + d); },
+  osc(type, f, t, dur, v, dest, o = {}) {
+    const c = this.ctx, os = c.createOscillator(), g = c.createGain();
+    if (type === 'pulse') os.setPeriodicWave(this.wave(o.duty || .25)); else os.type = type;
+    os.frequency.setValueAtTime(f, t);
+    if (o.to) os.frequency.exponentialRampToValueAtTime(o.to, t + (o.glide || dur));
+    if (o.from) { os.frequency.setValueAtTime(o.from, t); os.frequency.exponentialRampToValueAtTime(f, t + (o.glide || .05)); }
+    if (o.vib) { const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = o.vib; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(f * (o.vibDepth || .012), t + Math.min(dur, .25)); l.connect(lg); lg.connect(os.frequency); l.start(t); l.stop(t + dur + .3); }
+    let out = g;
+    if (o.lp) { const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.setValueAtTime(o.lp, t); if (o.lpTo) fl.frequency.exponentialRampToValueAtTime(o.lpTo, t + dur); g.connect(fl); out = fl; }
+    this.env(g, t, v, o.a || .005, o.d != null ? o.d : dur, o.hold || 0);
+    os.connect(g); out.connect(dest || this.sfxBus);
+    os.start(t); os.stop(t + (o.a || .005) + (o.hold || 0) + (o.d != null ? o.d : dur) + .05);
+    return os;
+  },
+  noise(t, dur, v, dest, o = {}) {
+    const c = this.ctx, s = c.createBufferSource(), g = c.createGain(), f = c.createBiquadFilter();
+    s.buffer = this._noise; s.loop = true; f.type = o.type || 'bandpass'; f.frequency.setValueAtTime(o.f || 2000, t); f.Q.value = o.q || 1;
+    if (o.fTo) f.frequency.exponentialRampToValueAtTime(o.fTo, t + dur);
+    this.env(g, t, v, o.a || .003, dur, o.hold || 0);
+    s.connect(f); f.connect(g); g.connect(dest || this.sfxBus); s.start(t, Math.random()); s.stop(t + dur + (o.a || .003) + (o.hold || 0) + .05);
+  },
+
+  // ---------- 乐器 ----------
+  I: {
+    // 掌机方波主旋律
+    lead(A, t, f, d, v, dest) { A.osc('pulse', f, t, d, v * .55, dest, { duty: .25, a: .008, d: d * .9, hold: d * .1, vib: 5.5, vibDepth: .006 }); },
+    lead50(A, t, f, d, v, dest) { A.osc('pulse', f, t, d, v * .45, dest, { duty: .5, a: .006, d: d * .85, hold: d * .1 }); },
+    // 笛子：柔和的正弦 + 一点泛音 + 气声 + 慢慢起来的颤音
+    dizi(A, t, f, d, v, dest) {
+      A.osc('sine', f, t, d, v * .7, dest, { a: .04, d: d * .6, hold: d * .45, vib: 5.2, vibDepth: .014 });
+      A.osc('triangle', f * 2, t, d, v * .12, dest, { a: .05, d: d * .5, hold: d * .4 });
+      A.noise(t, .09, v * .12, dest, { f: f * 3, q: 2, a: .01 });
+    },
+    // 古筝：拨弦，音头从上面滑下来一点，迅速衰减
+    zheng(A, t, f, d, v, dest) {
+      A.osc('triangle', f, t, d, v * .7, dest, { from: f * 1.03, glide: .04, a: .002, d: Math.max(.35, d * 1.6), lp: 3200, lpTo: 900 });
+      A.osc('pulse', f * 2, t, d, v * .12, dest, { duty: .125, a: .002, d: .18 });
+    },
+    // 低音：三角波
+    bass(A, t, f, d, v, dest) { A.osc('triangle', f, t, d, v * .9, dest, { a: .004, d: d * .7, hold: d * .2 }); },
+    // 琶音小方波（伴奏）
+    arp(A, t, f, d, v, dest) { A.osc('pulse', f, t, d, v * .25, dest, { duty: .125, a: .002, d: Math.min(.16, d) }); },
+    // 钟 / 编钟
+    bell(A, t, f, d, v, dest) { A.osc('sine', f, t, d, v * .5, dest, { a: .002, d: 1.4 }); A.osc('sine', f * 2.76, t, d, v * .15, dest, { a: .002, d: .5 }); A.osc('sine', f * 5.4, t, d, v * .06, dest, { a: .002, d: .25 }); },
+  },
+  // 打击乐
+  P: {
+    k(A, t, v, dest) { A.osc('sine', 150, t, .18, v * .9, dest, { to: 45, glide: .14, d: .2 }); },
+    s(A, t, v, dest) { A.noise(t, .12, v * .45, dest, { f: 1800, q: .7 }); A.osc('triangle', 220, t, .08, v * .3, dest, { to: 140, d: .09 }); },
+    h(A, t, v, dest) { A.noise(t, .035, v * .18, dest, { type: 'highpass', f: 7000 }); },
+    w(A, t, v, dest) { A.osc('sine', 880, t, .06, v * .5, dest, { to: 820, d: .07 }); A.osc('sine', 1760, t, .03, v * .15, dest, { d: .03 }); },   // 木鱼
+    W(A, t, v, dest) { A.osc('sine', 620, t, .06, v * .5, dest, { to: 580, d: .08 }); },                                                    // 低木鱼
+    g(A, t, v, dest) { A.osc('sine', 110, t, 1.6, v * .5, dest, { to: 92, glide: 1.2, d: 1.8 }); A.osc('sine', 247, t, 1, v * .18, dest, { to: 225, d: 1.1 }); A.noise(t, .4, v * .12, dest, { f: 600, q: 1.5 }); }, // 锣
+    c(A, t, v, dest) { A.noise(t, .45, v * .22, dest, { type: 'highpass', f: 5000 }); },                                               // 钹
+    x(A, t, v, dest) { A.noise(t, .06, v * .3, dest, { f: 3200, q: 3 }); },                                                              // 板
+  },
+
+  // ---------- 简谱 ----------
+  parse(str) {
+    const out = []; let last = null; (str.replace(/\|/g, ' ').trim().split(/\s+/)).forEach(tok => {
+      if (tok === '-') { if (last) last.len++; out.push(null); return; }
+      if (tok === '0') { last = null; out.push({ rest: true, len: 1 }); return; }
+      const m = tok.match(/^([b#]?)([1-7])(['’]*)([,，]*)$/); if (!m) { out.push({ rest: true, len: 1 }); return; }
+      const semi = SEMI[m[2]] + (m[1] === '#' ? 1 : m[1] === 'b' ? -1 : 0) + 12 * m[3].length - 12 * m[4].length;
+      last = { semi, len: 1 }; out.push(last);
+    });
+    return out;
+  },
+  play(name, songs) {
+    const song = (songs || this.SONGS)[name]; if (!song || !this.init()) return;
+    if (this.curName === name && this.cur) return;
+    this.stop(.4);
+    const c = this.ctx, bus = c.createGain(); bus.gain.value = 0.0001; bus.connect(this.musicBus);
+    bus.gain.exponentialRampToValueAtTime(1, c.currentTime + .3);
+    const st = { song, bus, step: 0, t: c.currentTime + .08, voices: song.voices.map(v => Object.assign({}, v, { seq: v.drum ? v.pat.replace(/\|/g, ' ').trim().split(/\s+/) : this.parse(v.pat) })) };
+    const total = Math.max(...st.voices.map(v => v.seq.length));
+    st.total = total;
+    this.cur = st; this.curName = name;
+    const spb = 60 / song.bpm / (song.div || 2);
+    const tick = () => {
+      if (this.cur !== st) return;
+      while (st.t < c.currentTime + .15) {
+        if (!song.loop && st.step >= total) { const s2 = st; setTimeout(() => { if (this.cur === s2) { this.cur = null; this.curName = ''; } }, 2500); return; }
+        st.voices.forEach(v => {
+          const i = st.step % v.seq.length, ev = v.seq[i];
+          if (v.drum) { if (ev && ev !== '.') [...ev].forEach(ch => this.P[ch] && this.P[ch](this, st.t, v.vol || .6, bus)); return; }
+          if (!ev || ev.rest) return;
+          const f = mtof(song.key + (v.oct || 0) * 12 + ev.semi);
+          this.I[v.inst](this, st.t + (v.delay || 0) * spb, f, ev.len * spb * (v.legato || .95), v.vol || .6, bus);
+        });
+        st.step++; st.t += spb * (song.swing && st.step % 2 ? 1 + song.swing : song.swing && !(st.step % 2) ? 1 - song.swing : 1);
+      }
+    };
+    tick(); clearInterval(this.timer); this.timer = setInterval(tick, 30);
+  },
+  stop(fade = .3) {
+    const st = this.cur; this.cur = null; this.curName = ''; clearInterval(this.timer);
+    if (st && this.ctx) { const t = this.ctx.currentTime; st.bus.gain.cancelScheduledValues(t); st.bus.gain.setValueAtTime(st.bus.gain.value, t); st.bus.gain.exponentialRampToValueAtTime(0.0001, t + fade); setTimeout(() => st.bus.disconnect(), (fade + 2.5) * 1000); }
+  },
+};
+
+// ================= 曲子（全部原创，五声音阶） =================
+const D = (pat, vol = .6) => ({ drum: true, pat, vol });
+AU.SONGS = {
+  // 花果山：悠闲轻快，笛子主奏，古筝分解和弦
+  home: { name: '花果山', bpm: 96, key: 65, div: 2, loop: true, voices: [
+    { inst: 'dizi', oct: 1, vol: .55, pat: '5 - 6 1\' 6 - 5 3 | 2 - 3 5 3 - - - | 5 - 6 1\' 2\' - 1\' 6 | 5 - - - 0 0 0 0 | 6 - 1\' 6 5 - 3 5 | 6 5 3 2 1 - - - | 2 3 5 6 5 3 2 3 | 1 - - - 0 0 0 0' },
+    { inst: 'zheng', oct: 0, vol: .32, pat: '1 5 1\' 5 3 5 1\' 5 | 5, 2 5 2 7, 2 5 2 | 6, 3 6 3 1 3 6 3 | 5, 2 5 2 5 2 5 2 | 4, 1 4 1 6 1 4 1 | 1 5 1\' 5 3 5 1\' 5 | 2, 6, 2 6, 5, 2 5 2 | 1 5 1\' 5 1 5 1\' 5' },
+    { inst: 'bass', oct: -1, vol: .45, pat: '1 - - - 5, - - - | 5, - - - 2 - - - | 6, - - - 3 - - - | 5, - - - 5, - - - | 4, - - - 1 - - - | 1 - - - 6, - - - | 2 - - - 5, - - - | 1 - - - 1 - - -' },
+    D('w . . . W . . . w . . . W . . . w . . . W . . . w . . . W . w .', .35),
+  ] },
+  // 取经路：有往前走的节奏
+  map: { name: '取经路', bpm: 112, key: 67, div: 2, loop: true, voices: [
+    { inst: 'lead', oct: 1, vol: .5, pat: '1 1 2 3 5 - 3 - | 6 5 3 2 3 - - - | 1 1 2 3 5 - 6 1\' | 6 5 6 1\' 2\' - - - | 3\' 2\' 1\' 6 5 - 6 - | 1\' 6 5 3 2 - - - | 3 5 6 1\' 6 5 3 2 | 1 - 0 1 1 - - -' },
+    { inst: 'dizi', oct: 0, vol: .25, pat: '0 0 0 0 0 0 0 0 | 0 0 0 0 0 0 0 0 | 0 0 0 0 0 0 0 0 | 0 0 0 0 0 0 0 0 | 3\' 2\' 1\' 6 5 - 6 - | 1\' 6 5 3 2 - - - | 3 5 6 1\' 6 5 3 2 | 1 - 0 0 0 0 0 0' },
+    { inst: 'bass', oct: -1, vol: .5, pat: '1 0 5, 0 1 0 5, 0 | 6, 0 3 0 6, 0 3 0 | 1 0 5, 0 1 0 5, 0 | 2 0 6, 0 2 0 5, 0 | 6, 0 3 0 6, 0 3 0 | 4, 0 1 0 5, 0 2 0 | 1 0 5, 0 6, 0 5, 0 | 1 0 5, 0 1 0 0 0' },
+    D('k h x h k h x h | k h x h k h x h | k h x h k h x h | k h x h k h x c | k h x h k h x h | k h x h k h x h | k h x h k h x h | k h x h k . c .', .5),
+  ] },
+  // 打小怪：羽调式（以 6 为主音），节奏稳，旋律稀
+  battle: { name: '拦路小妖', bpm: 126, key: 62, div: 2, loop: true, voices: [
+    { inst: 'lead', oct: 1, vol: .42, pat: '6 - 1\' 6 5 - 3 - | 5 6 5 3 2 - - - | 3 - 5 3 2 - 1 2 | 3 - - - 0 0 0 0 | 6 - 1\' 2\' 3\' - 2\' 1\' | 6 - 5 6 1\' - - - | 2\' 1\' 6 5 3 5 6 1\' | 6 - - - 0 0 0 0' },
+    { inst: 'arp', oct: 0, vol: .5, pat: '6, 3 6 3 6, 3 6 3 | 5, 2 5 2 5, 2 5 2 | 1 5 1\' 5 1 5 1\' 5 | 6, 3 6 3 6, 3 6 3 | 4, 1 4 1 4, 1 4 1 | 6, 3 6 3 6, 3 6 3 | 2 6 2\' 6 5, 2 5 2 | 6, 3 6 3 6, 3 6 3' },
+    { inst: 'bass', oct: -1, vol: .5, pat: '6, 6, 0 6, 3 0 6, 0 | 5, 5, 0 5, 2 0 5, 0 | 1 1 0 1 5, 0 1 0 | 6, 6, 0 6, 3 0 6, 0 | 4, 4, 0 4, 1 0 4, 0 | 6, 6, 0 6, 3 0 6, 0 | 2 2 0 2 5, 0 5, 0 | 6, 6, 0 6, 3 0 6, 0' },
+    D('k . h . s . h . | k . h k s . h . | k . h . s . h . | k . h k s . c . | k . h . s . h . | k . h k s . h . | k . h . s . h . | k . h k s x s x', .45),
+  ] },
+  // 头目战：更紧张，开头一声锣
+  boss: { name: '大王来了', bpm: 140, key: 62, div: 2, loop: true, voices: [
+    { inst: 'lead50', oct: 1, vol: .45, pat: '6 0 6 0 1\' 6 5 3 | 6 - - 3 5 - 6 - | 1\' 0 1\' 0 2\' 1\' 6 5 | 3 - - 5 6 - - - | 2\' - 1\' 6 5 - 3 5 | 6 - 5 3 2 - 1 2 | 3 3 5 6 1\' 6 5 3 | 6 - - - 6 0 0 0' },
+    { inst: 'dizi', oct: 2, vol: .18, pat: '0 0 0 0 0 0 0 0 | 0 0 0 0 0 0 0 0 | 0 0 0 0 0 0 0 0 | 0 0 0 0 0 0 0 0 | 2\' - 1\' 6 5 - 3 5 | 6 - 5 3 2 - 1 2 | 3 3 5 6 1\' 6 5 3 | 6 - - - 0 0 0 0' },
+    { inst: 'bass', oct: -1, vol: .55, pat: '6, 6, 6, 6, 6, 6, 6, 6, | 4, 4, 4, 4, 4, 4, 4, 4, | 6, 6, 6, 6, 6, 6, 6, 6, | 3, 3, 3, 3, 5, 5, 5, 5, | 2 2 2 2 2 2 2 2 | 6, 6, 6, 6, 5, 5, 5, 5, | 1 1 1 1 3 3 3 3 | 6, 6, 6, 6, 6, 0 0 0' },
+    D('gk . h k s . h . | k . h k s . h k | k . h k s . h . | k . h k s . c . | k . h k s . h . | k . h k s . h k | k . h k s . h . | k k s s k x c .', .5),
+  ] },
+  // 土地庙小铺 / 宝箱：俏皮，古筝 + 木鱼
+  shop: { name: '土地庙小铺', bpm: 100, key: 69, div: 2, loop: true, voices: [
+    { inst: 'zheng', oct: 1, vol: .5, pat: '3 5 6 5 3 2 1 2 | 3 - 5 - 6 - - - | 1\' 6 5 6 5 3 2 3 | 1 - - - - - 0 0 | 5 5 6 1\' 6 5 3 5 | 6 - 5 - 3 - - - | 2 3 5 3 2 1 6, 1 | 1 - - - - - 0 0' },
+    { inst: 'bass', oct: -1, vol: .4, pat: '1 0 5, 0 1 0 5, 0 | 6, 0 3 0 6, 0 3 0 | 4, 0 1 0 5, 0 2 0 | 1 0 5, 0 1 0 0 0 | 1 0 5, 0 4, 0 1 0 | 6, 0 3 0 6, 0 3 0 | 2 0 6, 0 5, 0 2 0 | 1 0 5, 0 1 0 0 0' },
+    D('w . W . w w W . | w . W . w w W . | w . W . w w W . | w . W . w . . . | w . W . w w W . | w . W . w w W . | w . W . w w W . | w . W . w . c .', .45),
+  ] },
+  // 筋斗云竞速：快
+  race: { name: '筋斗云', bpm: 158, key: 64, div: 2, loop: true, voices: [
+    { inst: 'lead', oct: 1, vol: .45, pat: '1 2 3 5 6 5 3 2 | 1\' 6 5 3 5 - - - | 6 1\' 2\' 1\' 6 5 3 5 | 6 - 1\' - 2\' - - - | 3\' 2\' 1\' 6 2\' 1\' 6 5 | 1\' 6 5 3 6 5 3 2 | 3 5 6 1\' 2\' 1\' 6 5 | 1\' - - - 1\' 0 0 0' },
+    { inst: 'arp', oct: 0, vol: .45, pat: '1 3 5 1\' 1 3 5 1\' | 6, 1 3 6 6, 1 3 6 | 4, 6, 1 4 4, 6, 1 4 | 5, 7, 2 5 5, 7, 2 5 | 6, 1 3 6 4, 6, 1 4 | 1 3 5 1\' 6, 1 3 6 | 4, 6, 1 4 5, 7, 2 5 | 1 3 5 1\' 1 0 0 0' },
+    { inst: 'bass', oct: -1, vol: .5, pat: '1 1 5, 5, 1 1 5, 5, | 6, 6, 3 3 6, 6, 3 3 | 4, 4, 1 1 4, 4, 1 1 | 5, 5, 2 2 5, 5, 2 2 | 6, 6, 3 3 4, 4, 1 1 | 1 1 5, 5, 6, 6, 3 3 | 4, 4, 1 1 5, 5, 2 2 | 1 1 5, 5, 1 0 0 0' },
+    D('kh h sh h kh h sh h | kh h sh h kh h sh h | kh h sh h kh h sh h | kh h sh h kh h sh c | kh h sh h kh h sh h | kh h sh h kh h sh h | kh h sh h kh h sh h | kh s s s kc . . .', .45),
+  ] },
+  // 擂台：对抗感（爸爸 vs 孩子）
+  duel: { name: '擂台斗法', bpm: 120, key: 60, div: 2, loop: true, voices: [
+    { inst: 'lead50', oct: 1, vol: .42, pat: '6 0 3 0 6 0 1\' 0 | 6 5 3 5 6 - - - | 5 0 2 0 5 0 6 0 | 5 3 2 3 5 - - - | 1\' - 6 - 1\' 2\' 3\' - | 2\' 1\' 6 5 6 - - - | 3 5 6 1\' 2\' 1\' 6 5 | 6 - - - 6 0 0 0' },
+    { inst: 'zheng', oct: 0, vol: .35, pat: '6, 0 6, 0 3 0 6, 0 | 6, 0 6, 0 3 0 6, 0 | 5, 0 5, 0 2 0 5, 0 | 5, 0 5, 0 2 0 5, 0 | 4, 0 4, 0 1 0 4, 0 | 5, 0 5, 0 2 0 5, 0 | 1 0 1 0 5, 0 5, 0 | 6, 0 6, 0 6, 0 0 0' },
+    { inst: 'bass', oct: -1, vol: .5, pat: '6, - - 6, 3 - 6, - | 6, - - 6, 3 - 6, - | 5, - - 5, 2 - 5, - | 5, - - 5, 2 - 5, - | 4, - - 4, 1 - 4, - | 5, - - 5, 2 - 5, - | 1 - - 1 5, - 5, - | 6, - - 6, 6, 0 0 0' },
+    D('k . x . k k x . | k . x . k k x . | k . x . k k x . | k . x . k k x c | k . x . k k x . | k . x . k k x . | k . x . k k x . | k x x x g . . .', .5),
+  ] },
+  // 一次性的短曲
+  win: { name: '胜利', bpm: 150, key: 67, div: 4, loop: false, voices: [
+    { inst: 'lead50', oct: 1, vol: .55, pat: '5 0 5 0 5 0 1\' - - - 3\' - 2\' 1\' 2\' - 5\' - - - - - - - 0 0 0 0' },
+    { inst: 'dizi', oct: 1, vol: .3, pat: '0 0 0 0 0 0 5 - - - 1\' - 6 5 6 - 1\' - - - - - - - 0 0 0 0' },
+    { inst: 'bass', oct: -1, vol: .5, pat: '1 0 1 0 1 0 1 - - - 6, - 5, - 5, - 1 - - - - - - - 0 0 0 0' },
+    D('k . k . k . kc . . . . . x . x . kg . . . . . . . . . . .', .55),
+  ] },
+  lose: { name: '再接再厉', bpm: 80, key: 62, div: 2, loop: false, voices: [
+    { inst: 'dizi', oct: 1, vol: .45, pat: '3 2 1 6, - - - 0 0 0' },
+    { inst: 'bass', oct: -1, vol: .35, pat: '1 - 6, - 4, - - 0 0 0' },
+  ] },
+  chest: { name: '开宝箱', bpm: 160, key: 72, div: 4, loop: false, voices: [
+    { inst: 'zheng', oct: 0, vol: .55, pat: '1 3 5 1\' 3 5 1\' 3\' 5\' - - - 0 0 0 0' },
+    { inst: 'bell', oct: 1, vol: .35, pat: '0 0 0 0 0 0 0 0 1\' - - - 0 0 0 0' },
+  ] },
+};
+
+// ================= 音效 =================
+const S = {
+  click(A, t) { A.osc('pulse', 1320, t, .03, .18, null, { duty: .25, d: .04 }); },
+  tap(A, t) { A.P.w(A, t, .55, A.sfxBus); },
+  // 答对：上行“叮—咚”，连对越多越高（五声音阶往上走）
+  correct(A, t, combo = 0) {
+    const steps = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24], k = Math.min(combo, steps.length - 3), base = 72 + steps[k];
+    A.I.zheng(A, t, mtof(base), .12, .7, A.sfxBus); A.I.zheng(A, t + .09, mtof(base + (steps[k + 2] - steps[k])), .2, .75, A.sfxBus);
+    A.osc('pulse', mtof(base + 24), t + .09, .08, .08, null, { duty: .125, d: .12 });
+  },
+  wrong(A, t) { A.osc('triangle', 330, t, .26, .4, null, { to: 196, glide: .22, d: .28 }); A.osc('sine', 165, t + .02, .2, .2, null, { to: 110, d: .22 }); },
+  swing(A, t) { A.noise(t, .16, .35, null, { f: 500, fTo: 3000, q: 1.2, a: .02 }); },
+  hit(A, t) { A.osc('sine', 180, t, .14, .7, null, { to: 60, d: .16 }); A.noise(t, .07, .45, null, { f: 1400, q: .8 }); },
+  normal(A, t) { S.swing(A, t); S.hit(A, t + .14); },
+  crit(A, t) { S.swing(A, t); S.hit(A, t + .14); A.I.bell(A, t + .15, mtof(88), .3, .5, A.sfxBus); A.I.bell(A, t + .2, mtof(95), .3, .35, A.sfxBus); },
+  charge(A, t) { [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => A.osc('pulse', mtof(60 + s), t + i * .05, .06, .14, null, { duty: .25, d: .07 })); A.noise(t, .4, .2, null, { f: 300, fTo: 4000, q: 2, a: .3 }); },
+  // 重棍：蓄力（越来越高的哨音）→ 跳起挥棍 → 金属“锵！”+ 砸地
+  heavy(A, t) {
+    S.charge(A, t);
+    A.osc('pulse', mtof(72), t + .1, .4, .14, null, { duty: .125, to: mtof(96), glide: .38, d: .4 });
+    A.noise(t + .45, .16, .45, null, { f: 900, fTo: 6000, q: 1.5 });
+    const h = t + .62;
+    [1, 2.76, 4.1, 5.4].forEach((r, i) => A.osc(i ? 'square' : 'triangle', 620 * r, h, .5, [.32, .06, .04, .025][i], null, { a: .001, d: .5 - i * .08, lp: 7000 }));
+    A.noise(h, .08, .5, null, { type: 'highpass', f: 3500 });
+    A.osc('sine', 160, h, .3, .7, null, { to: 45, glide: .25, d: .3 });
+    A.noise(h + .02, .35, .3, null, { f: 1800, fTo: 500, q: .7 });
+    for (let i = 0; i < 5; i++) A.noise(h + .06 + i * .04, .05, .2, null, { f: 1200 + i * 300, q: 3 });
+  },
+  // 大！大！大！
+  // 如意金箍棒·变！：分身嗖嗖嗖 → “大！大！大！”三声和弦一声比一声高 → 金箍棒从天而降的长哨 → 轰！→ 胜利小琶音
+  finish(A, t) {
+    [0, .1, .2].forEach((d, i) => { A.noise(t + d, .12, .3, null, { f: 800, fTo: 4000, q: 2 }); A.osc('pulse', mtof(84 + i * 3), t + d, .05, .12, null, { duty: .25, d: .06 }); });
+    const chords = [[60, 64, 67], [65, 69, 72], [70, 74, 77]];
+    chords.forEach((ch, i) => { const d = t + .4 + i * .36;
+      ch.forEach(m => { A.osc('pulse', mtof(m), d, .26, .14 + i * .04, null, { duty: .5, d: .28, vib: 7, vibDepth: .01 }); A.osc('pulse', mtof(m + 12), d, .26, .06 + i * .02, null, { duty: .25, d: .26 }); });
+      A.P.x(A, d, .7, A.sfxBus); A.P.k(A, d, .5 + i * .15, A.sfxBus); A.I.bell(A, d, mtof(84 + i * 5), .3, .25, A.sfxBus);
+    });
+    const dive = t + 1.5;
+    A.osc('pulse', 2400, dive, .42, .2, null, { duty: .25, to: 160, glide: .42, d: .42 });
+    A.noise(dive, .42, .35, null, { f: 6000, fTo: 400, q: 1.5 });
+    const hit = dive + .42;
+    A.P.k(A, hit, .9, A.sfxBus); A.P.g(A, hit, .8, A.sfxBus);
+    A.noise(hit, .9, .35, null, { type: 'highpass', f: 4000 });
+    A.noise(hit, .5, .3, null, { type: 'lowpass', f: 600 });
+    [1, 2.76, 5.4].forEach((r, i) => A.osc('triangle', 330 * r, hit, 1, [.4, .14, .07][i], null, { a: .001, d: 1.1 - i * .2 }));
+    [0, 4, 7, 12, 16, 19, 24].forEach((s2, i) => A.I.zheng(A, hit + .35 + i * .05, mtof(72 + s2), .2, .45, A.sfxBus));
+    A.I.bell(A, hit + .75, mtof(96), .5, .35, A.sfxBus);
+  },
+  fire(A, t) { A.noise(t, .7, .35, null, { type: 'lowpass', f: 1200, fTo: 400, a: .08 }); for (let i = 0; i < 8; i++) A.noise(t + Math.random() * .6, .02, .25, null, { f: 3000 + Math.random() * 3000, q: 4 }); A.osc('sine', 80, t, .6, .3, null, { a: .1, d: .6 }); },
+  water(A, t) { for (let i = 0; i < 7; i++) { const f = 300 + Math.random() * 500; A.osc('sine', f, t + i * .07, .06, .3, null, { to: f * 2.2, glide: .05, d: .07 }); } },
+  // 雷：两道“滋啦”电光 + 噼噼啪啪 + 远处轰隆
+  thunder(A, t) {
+    [0, .16].forEach((d, i) => { A.osc('square', 3200 - i * 600, t + d, .14, .3, null, { to: 180, glide: .14, d: .15, lp: 6000 }); A.osc('square', 4100 - i * 600, t + d + .01, .12, .15, null, { to: 240, glide: .12, d: .13 }); });
+    for (let i = 0; i < 12; i++) A.noise(t + .02 + i * .028 + Math.random() * .01, .018, .55 + Math.random() * .3, null, { f: 2500 + Math.random() * 5000, q: 4 });
+    A.noise(t + .32, 1.1, .5, null, { type: 'lowpass', f: 500, fTo: 140, a: .06 });
+    A.osc('sine', 70, t + .32, 1, .22, null, { a: .08, d: 1, to: 50 });
+  },
+  // 风：两阵“呼——”，带一点口哨般的风啸
+  wind(A, t) {
+    [0, .55].forEach((d, i) => {
+      A.noise(t + d, .7, 1.4, null, { f: 350, fTo: 1400, q: 3, a: .22 });
+      A.noise(t + d, .7, .9, null, { f: 900, fTo: 2600, q: 5, a: .25 });
+      A.osc('sine', 700 + i * 150, t + d + .05, .65, .2, null, { a: .2, d: .65, to: 1300 + i * 200, vib: 6, vibDepth: .03 });
+    });
+  },
+  poison(A, t) { for (let i = 0; i < 6; i++) A.noise(t + i * .09, .05, .25, null, { f: 5000, q: 8 }); A.osc('pulse', 220, t, .5, .1, null, { duty: .125, vib: 18, vibDepth: .08, d: .5 }); },
+  sonic(A, t) { A.osc('pulse', 440, t, .7, .18, null, { duty: .5, vib: 14, vibDepth: .15, d: .7 }); A.osc('pulse', 660, t + .1, .6, .1, null, { duty: .25, vib: 11, vibDepth: .12, d: .6 }); },
+  capture(A, t) { A.osc('sine', 220, t, .6, .4, null, { to: 1800, glide: .55, d: .6 }); A.noise(t, .5, .2, null, { f: 800, fTo: 5000, q: 2 }); A.osc('pulse', mtof(84), t + .62, .06, .25, null, { duty: .25, d: .1 }); A.osc('pulse', mtof(91), t + .7, .1, .25, null, { duty: .25, d: .2 }); },
+  god(A, t) { [72, 76, 79, 84, 88].forEach((m, i) => A.I.bell(A, t + i * .09, mtof(m), .5, .45, A.sfxBus)); A.osc('sine', mtof(60), t, 1.2, .15, null, { a: .3, d: 1.2 }); A.osc('sine', mtof(67), t, 1.2, .12, null, { a: .3, d: 1.2 }); },
+  drop(A, t) { [79, 84, 88, 91].forEach((m, i) => A.osc('pulse', mtof(m), t + i * .06, .07, .2, null, { duty: .125, d: .12 })); A.I.bell(A, t + .26, mtof(96), .4, .3, A.sfxBus); },
+  coin(A, t) { A.osc('pulse', mtof(83), t, .07, .22, null, { duty: .5, d: .06 }); A.osc('pulse', mtof(88), t + .07, .3, .22, null, { duty: .5, d: .3 }); },
+  crack(A, t, lv = 1) { A.noise(t, .05, .5, null, { f: 2000 + lv * 600, q: 3 }); A.osc('square', 900 + lv * 150, t, .03, .15, null, { to: 300, d: .05 }); A.P.w(A, t + .04, .4, A.sfxBus); },
+  shatter(A, t) { for (let i = 0; i < 10; i++) A.noise(t + i * .025, .04, .4, null, { f: 3000 + Math.random() * 4000, q: 5 }); A.P.k(A, t, .7, A.sfxBus); },
+  heal(A, t) { [72, 76, 79, 84].forEach((m, i) => A.osc('sine', mtof(m), t + i * .08, .25, .25, null, { a: .02, d: .3 })); },
+  focus(A, t) { A.osc('pulse', mtof(84), t, .06, .15, null, { duty: .25, d: .08 }); A.osc('pulse', mtof(91), t + .06, .12, .15, null, { duty: .25, d: .15 }); },
+  ready(A, t) { A.I.bell(A, t, mtof(84), .4, .4, A.sfxBus); A.I.bell(A, t + .1, mtof(91), .4, .4, A.sfxBus); A.noise(t, .3, .15, null, { type: 'highpass', f: 6000 }); },
+  ding(A, t) { A.I.bell(A, t, mtof(79), .6, .5, A.sfxBus); A.osc('sine', 300, t, .8, .2, null, { a: .01, d: .8, vib: 3, vibDepth: .03 }); },
+  // 连对里程碑：一声锣 + 越来越长的古筝上行 + 钟，等级越高越热闹
+  streak(A, t, tier = 1) {
+    A.P.g(A, t, .35 + tier * .08, A.sfxBus); A.P.c(A, t, .3 + tier * .06, A.sfxBus);
+    const run = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24].slice(0, 4 + tier * 1.5 | 0);
+    run.forEach((s2, i) => A.I.zheng(A, t + .05 + i * .045, mtof(67 + s2), .15, .5, A.sfxBus));
+    const end = t + .05 + run.length * .045;
+    [0, 4, 7].forEach(s2 => A.osc('pulse', mtof(67 + run[run.length - 1] - 12 + s2), end, .4, .1 + tier * .02, null, { duty: .5, d: .45, vib: 6, vibDepth: .01 }));
+    A.I.bell(A, end, mtof(84 + Math.min(tier, 4) * 2), .5, .45, A.sfxBus);
+    if (tier >= 4) A.noise(t, .6, .25, null, { f: 300, fTo: 3000, q: 1.5, a: .1 });
+    if (tier >= 5) [72, 76, 79, 84].forEach((m, i) => A.I.bell(A, end + .15 + i * .08, mtof(m + 12), .5, .35, A.sfxBus));
+  },
+  hurtMe(A, t) { A.osc('pulse', 520, t, .18, .25, null, { duty: .25, to: 260, d: .2 }); S.hit(A, t); },
+};
+AU.SFX = S;
+AU.sfx = function (name, ...args) { if (!this.init() || !S[name]) return; S[name](this, this.ctx.currentTime + .01, ...args); };
+
+// ================= 妖怪叫声（每只都不一样，像初代宝可梦） =================
+function hash(s) { let h = 2166136261; for (const ch of s) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function rng(seed) { return () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+AU.cry = function (key, o = {}) {
+  if (!this.init()) return 0;
+  const A = this, c = this.ctx, R = rng(hash(key)), t0 = c.currentTime + .02;
+  const size = o.size || 'mid';
+  const [lo, hi] = { big: [90, 380], mid: [200, 800], small: [420, 1500], god: [260, 700] }[size];
+  const pitch = (o.pitch || 1), short = o.short ? .5 : 1;
+  const duty = [.125, .25, .5][Math.floor(R() * 3)];
+  const segs = (o.short ? 2 : 3) + Math.floor(R() * 3);
+  const os = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter();
+  os.setPeriodicWave(this.wave(duty)); lp.type = 'lowpass'; lp.frequency.value = size === 'big' ? 1600 : 3200;
+  const vib = c.createOscillator(), vg = c.createGain(); vib.frequency.value = 6 + R() * 18; vg.gain.value = 0;
+  vib.connect(vg); vg.connect(os.frequency);
+  let t = t0, f = (lo + R() * (hi - lo)) * pitch;
+  os.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(0.0001, t);
+  for (let i = 0; i < segs; i++) {
+    const d = (.14 + R() * .22) * short, nf = Math.max(50, Math.min(2400, (lo + R() * (hi - lo)) * pitch));
+    const v = .35 + R() * .3;
+    g.gain.linearRampToValueAtTime(v, t + Math.min(.03, d * .3));
+    if (R() < .5) os.frequency.exponentialRampToValueAtTime(nf, t + d); else { os.frequency.setValueAtTime(nf, t + d * .2); }
+    vg.gain.setValueAtTime(R() < .5 ? nf * (.02 + R() * .05) : 0, t);
+    if (R() < .35 && i < segs - 1) g.gain.linearRampToValueAtTime(.05, t + d * .92);
+    t += d;
+  }
+  g.gain.exponentialRampToValueAtTime(0.0001, t + .08);
+  os.connect(lp); lp.connect(g); g.connect(o.dest || this.sfxBus);
+  os.start(t0); vib.start(t0); os.stop(t + .12); vib.stop(t + .12);
+  // 粗嗓门的加一点低吼噪声
+  const growl = size === 'big' ? .3 + R() * .3 : R() * .2;
+  if (growl > .08) this.noise(t0, t - t0, growl * .5, o.dest, { type: 'lowpass', f: 300 + R() * 600 });
+  return t - t0;
+};
+// 挨打时的“嗷”：叫声的短版、音调更高一点
+AU.hurt = function (key, size) { return this.cry(key, { size, short: true, pitch: 1.2 }); };
+
+window.QJ_AUDIO = AU;
+})();
+
 /* 取经小英雄 · 原创Q版角色库（SVG + CSS 动画）
    每个角色 viewBox 0 0 200 220，地面 y≈212。
    分组 class：bob 呼吸起伏 / blink 眨眼 / tail 摆尾 / weapon 武器 / sway 飘动 / spin 旋转 / flick 吐信 */
@@ -3200,37 +3550,40 @@ const SRS = {
 };
 
 // ================= 音效（合成，不需要外部文件） =================
+// 声音：用 audio.js 的合成引擎（西游中国风 8-bit）。音量是孩子自己在小齿轮里调的，只存在这台设备上
+const AU = window.QJ_AUDIO;
 const Sfx = {
-  ctx: null,
-  ensure() { if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } } if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
-  tone(f, d, type = 'sine', vol = .15, slide = 0, delay = 0) {
-    if (!Store.settings.sound || !this.ctx) return;
-    const t = this.ctx.currentTime + delay, o = this.ctx.createOscillator(), g = this.ctx.createGain();
-    o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, f + slide), t + d);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + d);
-    o.connect(g).connect(this.ctx.destination); o.start(t); o.stop(t + d + .02);
-  },
-  noise(d, vol = .2, delay = 0) {
-    if (!Store.settings.sound || !this.ctx) return;
-    const t = this.ctx.currentTime + delay, len = Math.floor(this.ctx.sampleRate * d), buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), data = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const s = this.ctx.createBufferSource(), g = this.ctx.createGain(); s.buffer = buf; g.gain.value = vol; s.connect(g).connect(this.ctx.destination); s.start(t);
-  },
+  ctx: null, combo: 0,
+  vol() { const v = Store.ls('vol') || {}; return { music: v.music != null ? v.music : .45, sfx: v.sfx != null ? v.sfx : .8 }; },
+  setVol(m, s) { const v = this.vol(); if (m != null) v.music = m; if (s != null) v.sfx = s; Store.ls('vol', v); if (AU) AU.setVol(v.music, v.sfx); },
+  on() { return Store.settings.sound !== false; },
+  ensure() { if (!AU) return; const c = AU.init(); this.ctx = c; const v = this.vol(); AU.setVol(v.music, v.sfx); AU.setMuted(!this.on()); if (this.want && !AU.curName) AU.play(this.want); },
+  ready() { return AU && AU.ctx && AU.ctx.state === 'running' && this.on(); },
+  fx(name, ...a) { if (this.ready()) AU.sfx(name, ...a); },
+  cry(k, o) { if (!this.ready()) return 0; return AU.cry(k, Object.assign({ size: sizeOf(k) }, o || {})); },
+  hurt(k) { if (this.ready()) AU.hurt(k, sizeOf(k)); },
+  bgm(name) { this.want = name; if (!AU || !AU.ctx) return; if (!name) AU.stop(); else if (AU.curName !== name) AU.play(name); },
+  jingle(name, then) { this.want = then || null; if (!this.ready()) return; AU.stop(.15); AU.play(name); },
+  duck(on) { if (AU && AU.ctx) AU.duck(on); },
   play(k) {
-    const T = (...a) => this.tone(...a);
-    if (k === 'click') T(660, .06, 'triangle', .08);
-    if (k === 'ok') { T(660, .1, 'triangle', .14); T(990, .16, 'triangle', .14, 0, .08); }
-    if (k === 'bad') { T(300, .25, 'sawtooth', .08, -120); }
-    if (k === 'hit') { this.noise(.12, .25); T(140, .15, 'square', .1, -60); }
-    if (k === 'crit') { this.noise(.2, .3); T(200, .3, 'square', .12, -120); T(880, .2, 'triangle', .1, 0, .05); }
-    if (k === 'hurt') { this.noise(.15, .2); T(220, .2, 'sawtooth', .1, -100); }
-    if (k === 'heal') { [523, 659, 784].forEach((f, i) => T(f, .18, 'sine', .12, 0, i * .07)); }
-    if (k === 'win') { [523, 659, 784, 1046].forEach((f, i) => T(f, .25, 'triangle', .14, 0, i * .12)); }
-    if (k === 'drop') { [880, 1175, 1568].forEach((f, i) => T(f, .15, 'sine', .12, 0, i * .06)); }
-    if (k === 'finish') { this.noise(.5, .35); T(90, .6, 'square', .14, -40); [784, 988, 1175].forEach((f, i) => T(f, .3, 'triangle', .1, 0, .2 + i * .1)); }
-    if (k === 'lose') { [392, 330, 262].forEach((f, i) => T(f, .3, 'triangle', .12, 0, i * .18)); }
+    const map = { click: 'click', ok: 'correct', bad: 'wrong', hit: 'normal', crit: 'crit', hurt: 'hurtMe', heal: 'heal', drop: 'drop', finish: null, win: null, lose: null };
+    if (k === 'ok') return this.fx('correct', this.combo);
+    if (k === 'win') return this.jingle('win');
+    if (k === 'lose') return this.jingle('lose');
+    if (map[k]) this.fx(map[k]);
   },
 };
+function sizeOf(k) {
+  if (['xiaozuanfeng', 'benbo', 'babo', 'bianfu', 'hujing', 'laoshu', 'yutu', 'xia', 'shancai'].includes(k)) return 'small';
+  const e = DATA.E[k]; if (DATA.GODS[k]) return 'god';
+  if ((e && e.kind === 'boss') || ['shitou', 'heixiong', 'yezhu'].includes(k)) return 'big';
+  return 'mid';
+}
+// 妖怪出招的声音（按属性）
+const ELEM = { honghaier: 'fire', niumowang: 'fire', hujing: 'fire', huli: 'fire', tuolong: 'water', linggan: 'water', xia: 'water', benbo: 'water', babo: 'water', hama: 'water', jiutouchong: 'water', bailong: 'water', shaseng: 'water',
+  huangfeng: 'wind', tieshan: 'wind', dapeng: 'wind', luli: 'wind', leigong: 'thunder', dianmu: 'thunder', xiezi: 'poison', baiyan: 'poison', zhizhu: 'poison', shejing: 'poison', bianfu: 'sonic', saitaisui: 'sonic', huangmei: 'sonic', xiaozuanfeng: 'sonic' };
+Sfx.elem = k => ELEM[k] || null;
+
 
 // ================= 装备与属性 =================
 const ItemBy = Object.fromEntries(G.ITEMS.map(i => [i.id, i]));
@@ -3281,7 +3634,7 @@ const ENEMY_KEYS = Object.keys(DATA.E);
 function name(k) { return (DATA.E[k] || {}).n || DATA.GODS[k] || k; }
 
 window.QJ_DEF_STATE = DEF_STATE;
-window.QJ = { C, MV, G, DATA, Arena, an, clear, sleep, rnd, $, $$, esc, today, shuffle, pick, clone, Store, Bank, SRS, Sfx, Gear, ItemBy, toast, STAGES, stageUnlocked, name, ENEMY_KEYS, dayOf };
+window.QJ = { AU, C, MV, G, DATA, Arena, an, clear, sleep, rnd, $, $$, esc, today, shuffle, pick, clone, Store, Bank, SRS, Sfx, Gear, ItemBy, toast, STAGES, stageUnlocked, name, ENEMY_KEYS, dayOf };
 })();
 
 /* 取经小英雄 · 云同步（离线网页版用）
@@ -3436,6 +3789,26 @@ const ICON = {
 };
 const allyIcon = k => `<svg viewBox="30 10 140 140">${(C[k]() || '').replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')}</svg>`;
 
+// ================= 连对火焰（像 MOBA 的连杀） =================
+const STREAK_NAME = { 3: '三连对！', 4: '势如破竹！', 5: '所向披靡！', 6: '大杀四方！', 7: '无人能挡！', 8: '天下无敌！', 10: '齐天大圣！' };
+const streakTier = n => n >= 10 ? 5 : n >= 8 ? 4 : n >= 6 ? 3 : n >= 4 ? 2 : n >= 2 ? 1 : 0;
+const FLAME = `<svg class="flm" viewBox="0 0 160 70" preserveAspectRatio="none" aria-hidden="true">${[[14, 46, 0], [38, 62, .25], [62, 54, .5], [86, 66, .1], [110, 52, .35], [134, 60, .6], [150, 40, .2]].map(([x, h, dl]) => `<g class="tg" style="animation-delay:-${dl}s;transform-origin:${x}px 70px"><path d="M${x} 70 C${x - 16} 70 ${x - 18} ${70 - h * .45} ${x - 6} ${70 - h * .7} C${x - 4} ${70 - h * .5} ${x + 2} ${70 - h * .5} ${x} ${70 - h} C${x + 14} ${70 - h * .7} ${x + 18} ${70 - h * .35} ${x + 12} 70 Z" class="f1"/><path d="M${x} 70 C${x - 8} 70 ${x - 9} ${70 - h * .3} ${x - 2} ${70 - h * .48} C${x} ${70 - h * .36} ${x + 3} ${70 - h * .36} ${x + 2} ${70 - h * .62} C${x + 9} ${70 - h * .42} ${x + 10} ${70 - h * .2} ${x + 6} 70 Z" class="f2"/></g>`).join('')}</svg>`;
+function streakHTML(n, pop) {
+  const t = streakTier(n); if (!t) return '';
+  return `<span class="streak t${t}${pop ? ' pop' : ''}">${FLAME}${t >= 2 ? '<i class="emb"></i><i class="emb"></i><i class="emb"></i><i class="emb"></i>' : ''}<b>连对 <em>×${n}</em></b></span>`;
+}
+function Battle_streakFx() {
+  const n = this.streak, old = $('#bt-q .streak');
+  const html = streakHTML(n, true);
+  if (old) old.outerHTML = html || ''; else if (html) { const tags = $('#bt-q .qtags'); if (tags) tags.insertAdjacentHTML('beforeend', html); }
+  const name = STREAK_NAME[n] || (n >= 12 && n % 2 === 0 ? `超神·${n} 连对！` : null);
+  if (!name) return;
+  const t = streakTier(n); Sfx.fx('streak', t);
+  const b = document.createElement('div'); b.className = `streak-banner t${t}`;
+  b.innerHTML = `${FLAME}<b>${name}</b><small>连续答对 ${n} 题</small>`;
+  $('#bt-arena').appendChild(b); setTimeout(() => b.remove(), 2300);
+};
+
 // ================= 战斗 =================
 class Battle {
   constructor(cfg) {
@@ -3457,15 +3830,18 @@ class Battle {
     if (this.buffUsed) Store.state.buff = {};
   }
   get foe() { return this.foes[this.fi]; }
+  streakFx() { Battle_streakFx.call(this); }
+  music() { Sfx.bgm(this.foe && this.foe.boss ? 'boss' : 'battle'); }
   // 字幕留够时间让孩子读完；新字幕会顶掉旧的计时
   capT(ms) { clearTimeout(this._capT); const ar = this.ar; this._capT = setTimeout(() => { if (this.live) ar.caption(''); }, ms); }
   async start() {
-    const ar = this.ar; show('battle'); ar.fit(); ar.caption('');
+    const ar = this.ar; show('battle'); ar.fit(); ar.caption(''); this.music();
     $('#bt-title').textContent = this.cfg.title;
     ar.put(ar.L, Gear.wukong());
     this.renderHP(); this.renderSkills();
     $('#bt-q').innerHTML = '';
-    if (this.foe) { ar.put(ar.R, enemySvg(this.foe.k)); ar.enter(ar.R); }
+    if (this.foe) { ar.put(ar.R, enemySvg(this.foe.k)); ar.enter(ar.R); setTimeout(() => this.live && Sfx.cry(this.foe.k), 300); }
+    ar.onHit = D => { if (!this.live) return; if (D === ar.L) Sfx.fx('hurtMe'); else { const k = this.miniKey || (this.foe && this.foe.k); if (k && !this.chest) Sfx.hurt(k); } };
     ar.enter(ar.L, 1);
     await sleep(600);
     if (this.foe) ar.caption(this.foe.intro || `${name(this.foe.k)} 拦住了去路！`);
@@ -3537,7 +3913,7 @@ class Battle {
         // 题目先显示出来（小妖站稳前先不让点），小妖一边说话孩子一边读题
         this.renderQ(); this.qShown = true; $('#opts').classList.add('lock');
         ar.caption(`错题小妖 ${name(mk)} 跳出来拦路：“上次做错的题，再考考你！”`); this.capT(3200);
-        ar.put(ar.R, C[mk]()); await ar.enter(ar.R, 1.4, 1100);
+        ar.put(ar.R, C[mk]()); setTimeout(() => this.live && Sfx.cry(mk), 400); await ar.enter(ar.R, 1.4, 1100);
         await an(ar.R.mover, [{ transform: 'none' }, { transform: 'translateY(-30px)' }, { transform: 'none' }, { transform: 'translateY(-18px)' }, { transform: 'none' }], 700, { fill: 'none' });
         if (!this.live) return;
         if ($('#opts')) $('#opts').classList.remove('lock');
@@ -3556,7 +3932,7 @@ class Battle {
     const multi = q.ans.length > 1;
     const long = q.opts.some(o => o.length > 14);
     const rev = SRS.isReview(q);
-    $('#bt-q').innerHTML = `<div class="qtags"><span class="tag subj">${esc(q.subj)}</span><span class="tag">${esc(q.kp)}</span>${rev ? '<span class="tag rev">错题复习</span>' : ''}${multi ? '<span class="tag multi">多选</span>' : ''}${this.streak >= 2 ? `<span class="combo">连对 ×${this.streak}</span>` : ''}</div>
+    $('#bt-q').innerHTML = `<div class="qtags"><span class="tag subj">${esc(q.subj)}</span><span class="tag">${esc(q.kp)}</span>${rev ? '<span class="tag rev">错题复习</span>' : ''}${multi ? '<span class="tag multi">多选</span>' : ''}${streakHTML(this.streak)}</div>
       <div class="qtext">${esc(q.q)}</div>${q.img ? `<img class="qimg" src="${esc(q.img)}" alt="题目图片">` : ''}
       <div class="opts${long ? ' wide' : ''}" id="opts">${this.order.map((oi, k) => `<button type="button" class="opt" data-i="${oi}"><span class="lt">${'ABCDEF'[k]}</span><span>${esc(q.opts[oi])}</span></button>`).join('')}</div>
       ${multi ? '<button type="button" class="btn gold confirm" id="confirm" disabled>选好了</button>' : ''}`;
@@ -3580,9 +3956,10 @@ class Battle {
     if (first) { SRS.record(q, ok); this.answered++; if (ok) { this.correct++; Store.state.xp += 1; Store.save('state'); } else this.wrongIds.add(q.id); }
     if (ok) {
       $$('.opt').forEach(b => { if (q.ans.includes(+b.dataset.i)) b.classList.add('ok'); });
-      Sfx.play('ok');
+      Sfx.combo = this.streak; Sfx.play('ok');
       this.streak++; this.bestStreak = Math.max(this.bestStreak, this.streak); this.wrongRow = 0;
-      if (this.mode !== 'free') this.focus = Math.min(4, this.focus + (this.tot.focus || 1));
+      if (this.mode !== 'free') { const f0 = this.focus; this.focus = Math.min(4, this.focus + (this.tot.focus || 1)); if (this.focus >= 4 && f0 < 4) setTimeout(() => Sfx.fx('ready'), 250); }
+      this.streakFx();
       if (this.st.four.binghe && this.mode !== 'free') this.heal(3, true);
       if (this.chest) await this.openChest();
       else await this.hitEnemy();
@@ -3590,9 +3967,9 @@ class Battle {
       this.i++; await sleep(120); this.next();
     } else {
       $$('.opt').forEach(b => { if (sel.has(+b.dataset.i)) b.classList.add('bad'); });
-      Sfx.play('bad'); this.streak = 0; this.wrongRow++;
+      Sfx.play('bad'); this.streak = 0; this.wrongRow++; { const st = $('#bt-q .streak'); if (st) st.classList.add('out'); }
       if (this.flags.dingArmed) {
-        this.flags.dingArmed = false; this.ar.caption('定身术！妖怪被定住了，再选一次吧'); Sfx.play('heal');
+        this.flags.dingArmed = false; this.ar.caption('定身术！妖怪被定住了，再选一次吧'); Sfx.fx('ding');
         $$('.opt.bad').forEach(b => { b.classList.remove('bad'); b.classList.add('gone'); });
         an(this.ar.R.mover, [{ filter: 'none' }, { filter: 'grayscale(1) brightness(1.3)' }, { filter: 'none' }], 1200, { fill: 'none' });
         opts.classList.remove('lock'); this.selected = new Set(); if ($('#confirm')) $('#confirm').disabled = true;
@@ -3631,10 +4008,10 @@ class Battle {
     const lethal = f.hp - d <= 0;
     ar.nextDmg = { text: (crit ? '暴击 ' : '') + '-' + d, crit };
     if (label) ar.caption(label);
-    Sfx.play(crit || kind === 'heavy' ? 'crit' : 'hit');
+    if (kind === 'heavy') Sfx.fx('heavy'); else if (!lethal) Sfx.fx(crit ? 'crit' : 'normal');
     // 头目用最炫的“如意金箍棒·变”，小怪用跳劈收尾，节奏快一些
-    if (lethal && kind !== 'heavy' && f.boss) { Sfx.play('finish'); await MV.wk_finish.run(ar, ar.L, ar.R); }
-    else if (lethal && kind !== 'heavy') { Sfx.play('finish'); await MV.wk_normal.run(ar, ar.L, ar.R); }
+    if (lethal && kind !== 'heavy' && f.boss) { Sfx.fx('finish'); await MV.wk_finish.run(ar, ar.L, ar.R); }
+    else if (lethal && kind !== 'heavy') { Sfx.fx('crit'); await MV.wk_normal.run(ar, ar.L, ar.R); }
     else await (kind === 'heavy' ? MV.wk_heavy : MV.wk_normal).run(ar, ar.L, ar.R);
     ar.L.fresh();
     f.hp = Math.max(0, f.hp - d); this.renderHP();
@@ -3643,9 +4020,9 @@ class Battle {
   }
   async hitEnemy() {
     const ar = this.ar;
-    if (this.mode === 'free') { ar.nextDmg = { text: '好！', crit: false }; Sfx.play('hit'); await MV.wk_normal.run(ar, ar.L, ar.R); ar.L.fresh(); ar.R.fresh(); Store.state.gold += 1; return; }
+    if (this.mode === 'free') { ar.nextDmg = { text: '好！', crit: false }; Sfx.fx('normal'); await MV.wk_normal.run(ar, ar.L, ar.R); ar.L.fresh(); ar.R.fresh(); Store.state.gold += 1; return; }
     if (this.miniKey) {
-      const { d } = this.dmg(1); ar.nextDmg = { text: '-' + d, crit: false }; Sfx.play('hit');
+      const { d } = this.dmg(1); ar.nextDmg = { text: '-' + d, crit: false }; Sfx.fx('normal');
       await MV.wk_normal.run(ar, ar.L, ar.R); ar.L.fresh();
       const mk = this.miniKey; await sleep(300);
       ar.caption(`${name(mk)}被打得哇哇叫，慌慌张张跑去给大王报信了！`);
@@ -3673,7 +4050,7 @@ class Battle {
     let d = Math.max(Math.round(atk * .35), atk - (this.tot.def || 0));
     if (this.st.four.heifeng && !this.flags.heifengUsed) { this.flags.heifengUsed = true; d = 0; ar.caption('黑风护体！这一下不疼'); }
     ar.nextDmg = { text: d ? '-' + d : '挡住了', crit: false };
-    Sfx.play('hurt');
+    { const el = Sfx.elem(k); Sfx.cry(k, { short: true }); if (el) setTimeout(() => Sfx.fx(el), 350); else setTimeout(() => Sfx.fx('swing'), 300); }
     await MV[k].run(ar, ar.R, ar.L);
     ar.L.fresh(); ar.R.fresh();
     this.hp = Math.max(0, this.hp - d); this.renderHP(); ar.caption('');
@@ -3698,13 +4075,13 @@ class Battle {
     const ar = this.ar, f = this.foe, E = DATA.E[f.k] || {};
     this.kills.push(f.k); this.markCodex(f.k);
     if (E.kind === 'ally') {
-      ar.caption(`${E.n}：${E.end}`); Sfx.play('win');
+      ar.caption(`${E.n}：${E.end}`); Sfx.fx('drop');
       await sleep(900);
       await an(ar.R.mover, [{ transform: 'none' }, { transform: 'translateY(-40px) scale(1.1)', offset: .3 }, { transform: `translateX(${ar.R.dir * 280}px) scale(.6)`, opacity: 0 }], 1200, { easing: 'ease-in-out' });
       if (this.mode === 'story' && !(Store.state.allies || []).includes(f.k)) { Store.state.allies.push(f.k); this.loot.push({ ally: f.k }); }
     } else {
+      Sfx.fx('capture'); if (E.owner && f.boss) setTimeout(() => this.live && Sfx.fx('god'), 1500);
       await ar.capture(ar.R, { key: f.k, beast: E.yx || null, owner: E.owner || null, text: E.end || '逃走了', quick: !f.boss && !E.owner }, C);
-      Sfx.play('win');
     }
     await sleep(f.boss ? 1600 : 150);
     if (f.boss) this.rollBoss(f.k); else this.rollMob();
@@ -3712,7 +4089,7 @@ class Battle {
     if (!this.live) return;
     if (this.fi < this.foes.length - 1) {
       this.fi++; ar.caption(''); ar.put(ar.L, Gear.wukong());
-      ar.put(ar.R, enemySvg(this.foe.k)); if (this.foe.boss) await ar.enter(ar.R); else ar.enter(ar.R);
+      ar.put(ar.R, enemySvg(this.foe.k)); this.music(); setTimeout(() => this.live && Sfx.cry(this.foe.k), 250); if (this.foe.boss) await ar.enter(ar.R); else ar.enter(ar.R);
       ar.caption(this.foe.boss ? `头目 ${name(this.foe.k)} 出现了！` : `${name(this.foe.k)} 冲了过来！`); if (this.foe.boss) await sleep(900); this.capT(this.foe.boss ? 900 : 1600);
       this.renderHP();
     } else { this.renderHP(); }
@@ -3752,7 +4129,7 @@ class Battle {
     // 偷偷决定箱子里有什么，最后一起揭晓
     this.chestGold += 5; if (Math.random() < .2 * this.luck()) { const pool = G.ITEMS.filter(i => i.drop === 'mob' || (i.set && i.set === this.cfg.set)); this.chestItems.push(pick(pool).id); }
     const p = ar.pt(ar.R, 100, 150);
-    ar.nextDmg = { text: '咔！', crit: false }; Sfx.play('hit');
+    ar.nextDmg = { text: '咔！', crit: false }; Sfx.fx('swing'); setTimeout(() => Sfx.fx('crack', lv), 150);
     await MV.wk_normal.run(ar, ar.L, ar.R); ar.L.fresh();
     if (sv) for (let i = 1; i <= 4; i++) { const c = sv.querySelector('.ck' + i); if (c) c.setAttribute('opacity', i <= lv ? '1' : '0'); }
     const lock = sv && sv.querySelector('.lock');
@@ -3768,10 +4145,10 @@ class Battle {
     if (!this.chestHits) { this.chestGold = 3; }
     ar.caption(this.chestHits ? '咔嚓！锁彻底断开了！' : '宝箱的锁太结实了……只从缝里抖出来一点灵蕴');
     if (this.chestHits && lock) {
-      Sfx.play('crit'); ar.shake(8, 300);
+      Sfx.fx('shatter'); ar.shake(8, 300);
       await an(lock, [{ transform: 'none' }, { transform: 'translate(-30px,80px) rotate(-70deg)', opacity: 0 }], 600, { easing: 'ease-in' });
       ar.particles(p.x, p.y, { kind: 'rock', color: ['#f2c94c', '#bdbdbd'], n: 10, spread: 3.1, speed: 120, size: 10 });
-      await sleep(300); sv.classList.add('open'); Sfx.play('drop');
+      await sleep(300); sv.classList.add('open'); Sfx.jingle('chest', 'battle');
       const gl = sv.querySelector('.glow'); if (gl) an(gl, [{ opacity: 0 }, { opacity: 1 }, { opacity: .6 }], 900);
     }
     await sleep(700);
@@ -3869,7 +4246,8 @@ class Battle {
   }
 }
 window.QJ.Battle = Battle;
-function show(id) { $$('.screen').forEach(s => s.classList.toggle('on', s.id === id)); }
+const BGM = { home: 'home', map: 'map', intro: 'map', bag: 'home', codex: 'home', cards: 'home', free: 'home', shop: 'shop', race: 'race', duel: 'duel', parent: null };
+function show(id) { $$('.screen').forEach(s => s.classList.toggle('on', s.id === id)); if (id in BGM) Sfx.bgm(BGM[id]); document.body.dataset.screen = id; }
 window.QJ.show = show;
 
 // 战斗界面事件
@@ -4057,6 +4435,22 @@ document.addEventListener('click', e => {
   const c = e.target.closest('#cards-grid .card'); if (!c) return; const k = c.dataset.g, f = S().frags[k] || 0, u = S().cards[k] || 0;
   if (!f && !u) return toast('还没有这位神仙的碎片：打败 Boss、复习错题都有机会获得');
   demoModal(DATA.GODS[k], `<p>碎片 ${f}/3 · 可用 ${u} 次。攒够 3 个碎片就多 3 次召唤。战斗中点“援军卡”召唤，每场一次，伤害是攻击的 3 倍。</p>`, MV[k] ? k : null, 'heixiong');
+});
+
+// ================= 声音小齿轮（孩子自己调） =================
+document.addEventListener('click', e => {
+  if (!e.target.closest('[data-gear]')) return;
+  Sfx.ensure(); Sfx.play('click');
+  const v = Sfx.vol(), m = $('#modal'); m.hidden = false;
+  $('#modal .mbox').innerHTML = `<button type="button" class="x" aria-label="关闭">×</button><h2>声音</h2>
+    <div class="volrow"><label for="g-music">音乐</label><input type="range" id="g-music" min="0" max="100" value="${Math.round(v.music * 100)}"><b id="g-music-n">${Math.round(v.music * 100)}</b>
+    <label for="g-sfx">音效</label><input type="range" id="g-sfx" min="0" max="100" value="${Math.round(v.sfx * 100)}"><b id="g-sfx-n">${Math.round(v.sfx * 100)}</b></div>
+    <div class="row"><button type="button" class="btn" id="g-ok">好了</button></div>`;
+  const close = () => { m.hidden = true; };
+  $('#modal .x').onclick = close; $('#g-ok').onclick = close;
+  $('#g-music').oninput = ev => { $('#g-music-n').textContent = ev.target.value; Sfx.setVol(ev.target.value / 100, null); };
+  $('#g-sfx').oninput = ev => { $('#g-sfx-n').textContent = ev.target.value; Sfx.setVol(null, ev.target.value / 100); };
+  $('#g-sfx').onchange = () => Sfx.fx('correct', 2);
 });
 
 // ================= 土地庙小铺 =================
