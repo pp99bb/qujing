@@ -4279,7 +4279,7 @@ function render() {
   const L = layout(), st = S(), cur = curIndex();
   let firstLocked = DATA.CH.findIndex((ch, ci) => !stageUnlocked(STAGES.findIndex(s => s.id === ch.stages[0].id)));
   if (firstLocked < 0) firstLocked = 99;
-  let g = `<defs><filter id="wm-gray"><feColorMatrix type="saturate" values="0.05"/></filter>
+  let g = `<defs><filter id="wm-gray"><feColorMatrix type="saturate" values="0.05"/></filter><filter id="wm-sil"><feFlood flood-color="#23232b"/><feComposite in2="SourceAlpha" operator="in"/></filter>
     <pattern id="wm-grass" width="40" height="30" patternUnits="userSpaceOnUse"><path d="M6 24 q2 -8 4 0 M24 16 q2 -8 4 0" stroke="#000" stroke-opacity=".08" stroke-width="2" fill="none"/></pattern></defs>`;
   L.chs.forEach(c => {
     const T = THEME[c.ci] || THEME[0], locked = c.ci >= firstLocked;
@@ -4298,8 +4298,8 @@ function render() {
     g += `<g class="wm-banner"><path d="M${c.x + 20} 22 h${Math.min(c.w - 40, 330)} l-14 22 l14 22 h-${Math.min(c.w - 40, 330)} Z" fill="${locked ? '#9e9e9e' : '#8d2c1f'}" stroke="${O}" stroke-width="3"/>
       <text x="${c.x + 36}" y="53" font-size="24" fill="#fff8dc" font-family="ZCOOL KuaiLe, sans-serif">${esc(num)} · ${esc(nm)}</text></g>`;
     if (c.ci) g += `<path d="M${c.x} 0 V${H}" stroke="#fff" stroke-width="3" stroke-dasharray="10 10" opacity=".7"/>`;
-    if (locked) g += `<g class="wm-lock"><rect x="${c.x}" y="0" width="${c.w}" height="${H}" fill="#fff" opacity=".25"/>${cloud(c.x + c.w / 2 - 80, 250, 1.6, '#f5f5f5')}${cloud(c.x + c.w / 2 + 90, 270, 1.4, '#f5f5f5')}
-      <g transform="translate(${c.x + c.w / 2} 250)"><rect x="-80" y="-28" width="160" height="56" rx="28" fill="#616161" stroke="${O}" stroke-width="3"/><text x="0" y="10" text-anchor="middle" font-size="26" fill="#fff" font-family="ZCOOL KuaiLe, sans-serif">未解锁</text></g></g>`;
+    if (locked) g += `<g class="wm-lock"><rect x="${c.x}" y="0" width="${c.w}" height="${H}" fill="#fff" opacity=".25"/><g filter="url(#wm-sil)" opacity=".35">${sprite(C[c.ch.stages[c.ch.stages.length - 1].boss](), c.x + c.w / 2, 330, 300)}</g>${cloud(c.x + c.w / 2 - 80, 180, 1.6, '#f5f5f5')}${cloud(c.x + c.w / 2 + 90, 200, 1.4, '#f5f5f5')}
+      <g transform="translate(${c.x + c.w / 2} 180)"><rect x="-80" y="-28" width="160" height="56" rx="28" fill="#616161" stroke="${O}" stroke-width="3"/><text x="0" y="10" text-anchor="middle" font-size="26" fill="#fff" font-family="ZCOOL KuaiLe, sans-serif">未解锁</text></g></g>`;
   });
   // 取经路
   const pts = L.nodes;
@@ -4314,7 +4314,7 @@ function render() {
       <ellipse cx="${p.x}" cy="${p.y + 6}" rx="44" ry="18" fill="#000" opacity=".15"/>
       <circle cx="${p.x}" cy="${p.y}" r="30" fill="${done ? '#2f7d6b' : un ? '#f2b632' : '#9e9e9e'}" stroke="${O}" stroke-width="4"/>
       ${done ? `<path d="M${p.x - 12} ${p.y} l8 9 l16 -18" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>` : un ? `<text x="${p.x}" y="${p.y + 9}" text-anchor="middle" font-size="26" font-weight="900" fill="${O}">${i + 1}</text>` : `<path d="M${p.x - 9} ${p.y - 2} v-7 a9 9 0 0 1 18 0 v7" fill="none" stroke="#fff" stroke-width="4"/><rect x="${p.x - 13}" y="${p.y - 3}" width="26" height="18" rx="4" fill="#fff"/>`}
-      ${un ? sprite(boss, p.x, p.y - 34, 100, 'wm-boss') : ''}
+      ${un ? sprite(boss, p.x, p.y - 34, 100, 'wm-boss') : `<g filter="url(#wm-sil)" opacity=".75">${sprite(boss, p.x, p.y - 34, 100, 'wm-boss')}</g>`}
       <rect x="${p.x - 62}" y="${p.y + 40}" width="124" height="30" rx="15" fill="${un ? '#fffaf0' : '#e0e0e0'}" stroke="${O}" stroke-width="2.5"/>
       <text x="${p.x}" y="${p.y + 62}" text-anchor="middle" font-size="18" fill="${O}" font-family="ZCOOL KuaiLe, sans-serif">${esc(p.s.n.length > 6 ? p.s.n.slice(0, 6) : p.s.n)}</text>
       ${done > 1 ? `<text x="${p.x + 34}" y="${p.y - 22}" font-size="15" font-weight="700" fill="#2f7d6b">×${done}</text>` : ''}
