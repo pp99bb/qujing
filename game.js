@@ -3795,6 +3795,7 @@ const ICON = {
 };
 const allyIcon = k => `<svg viewBox="30 10 140 140">${(C[k]() || '').replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')}</svg>`;
 
+const Q_Guest = () => window.QJ.Guest;
 // ================= 连对火焰（像 MOBA 的连杀） =================
 const STREAK_NAME = { 3: '三连对！', 4: '势如破竹！', 5: '所向披靡！', 6: '大杀四方！', 7: '无人能挡！', 8: '天下无敌！', 10: '齐天大圣！' };
 const streakTier = n => n >= 10 ? 5 : n >= 8 ? 4 : n >= 6 ? 3 : n >= 4 ? 2 : n >= 2 ? 1 : 0;
@@ -4235,6 +4236,7 @@ class Battle {
   // ---------- 结束 ----------
   async finish(outcome) {
     if (this.done || !this.live) return; this.done = true; this.renderSkills();
+    if (this.mode === 'story' && Q_Guest()) Q_Guest().countStage();
     const st = this.cfg.stage, S = Store.state, gm = 1 + (this.tot.gold || 0) / 100;
     let gold = Math.round(this.correct * 3 * gm);
     const win = outcome === 'win';
@@ -5084,4 +5086,56 @@ function kidSetup(force) {
 })();
 window.QJ.openParent = openParent;
 window.QJ.kidSetup = kidSetup;
+})();
+
+/* 取经小英雄 · 游客试玩限制（只在离线网页版的孩子端生效）
+   没填同步码的“游客”：打完 4 关，或者所有模式累计答满 100 题，就要输入作者给的密码才能继续玩。
+   计数单独存，重置进度也不会清掉。 */
+(function(){
+'use strict';
+const Q = window.QJ;
+const { Store, SRS, $ } = Q;
+const LIMIT_Q = 100, LIMIT_STAGE = 4;
+const H = '1dvtc05'; // 密码的指纹（不直接写明文）
+const hash = s => { let x = 2166136261; for (const c of 'qj-salt:' + s) { x ^= c.codePointAt(0); x = Math.imul(x, 16777619); } return (x >>> 0).toString(36); };
+
+const Guest = {
+  get active() { return window.QJ_APP === 'kid' && !Store.cloud && !(Q.Sync && Q.Sync.on) && !Store.ls('unlocked'); },
+  get n() { return Store.ls('guest_q') || 0; },
+  get stages() { return Store.ls('guest_s') || 0; },
+  over() { return this.active && (this.n >= LIMIT_Q || this.stages >= LIMIT_STAGE); },
+  countQ() { if (!this.active) return; Store.ls('guest_q', this.n + 1); if (this.over()) this.lock(); },
+  countStage() { if (!this.active) return; Store.ls('guest_s', this.stages + 1); if (this.over()) setTimeout(() => this.lock(), 2500); },
+  lock() {
+    if ($('#guest-lock')) return;
+    try { if (Q.AU) Q.AU.stop(.5); } catch (e) {}
+    const d = document.createElement('div'); d.id = 'guest-lock'; d.className = 'guest-lock';
+    d.innerHTML = `<div class="gl-box"><h2>试玩结束啦</h2>
+      <p>游客最多可以玩 ${LIMIT_STAGE} 关或答 ${LIMIT_Q} 道题。想继续玩，请联系作者要密码。</p>
+      <input type="password" id="gl-pw" placeholder="输入密码" autocomplete="off" style="width:100%">
+      <p id="gl-msg" class="note-bad"></p>
+      <button type="button" class="btn gold" id="gl-ok">解锁</button>
+      <p style="color:var(--mute);font-size:13px;margin:0">家里人：如果有家长给的同步码，也可以填在这里。</p></div>`;
+    document.body.appendChild(d);
+    const tryIt = async () => {
+      const v = $('#gl-pw').value.trim(); if (!v) return;
+      if (hash(v) === H) { Store.ls('unlocked', 1); d.remove(); Q.toast('解锁成功，继续取经吧！', 3000); return; }
+      if (/^g(ithub_pat_|hp_)/.test(v) && Q.Sync) {
+        $('#gl-msg').textContent = '正在检查同步码……'; Q.Sync.configure(v);
+        try { await Q.Sync.test(); await Q.Sync.pull(); Q.Bank.rebuild(); Q.Sync.pushKid(0); d.remove(); Q.toast('同步已打开', 3000); Q.goHome(); return; }
+        catch (er) { Q.Sync.configure(''); $('#gl-msg').textContent = er.message; return; }
+      }
+      $('#gl-msg').textContent = '密码不对，请再问问作者';
+    };
+    $('#gl-ok').onclick = tryIt; $('#gl-pw').onkeydown = e => { if (e.key === 'Enter') tryIt(); };
+    // 正在进行的战斗停下来
+    if (Q.curBattle && !Q.curBattle.done) Q.curBattle.busy = true;
+  },
+};
+Q.Guest = Guest;
+// 所有模式答题都会经过 SRS.record（每道题第一次作答）
+const rec = SRS.record.bind(SRS);
+SRS.record = function (q, ok) { rec(q, ok); Guest.countQ(); };
+// 启动时已经超了就直接锁
+setTimeout(() => { if (Guest.over()) Guest.lock(); }, 1500);
 })();

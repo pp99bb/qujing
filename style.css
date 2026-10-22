@@ -337,6 +337,10 @@ body[data-screen="battle"] .gearbtn,body[data-screen="parent"] .gearbtn,body.par
 .volrow{display:grid;grid-template-columns:auto 1fr auto;gap:10px 14px;align-items:center;font-size:18px;font-weight:700}
 .volrow input{width:100%;accent-color:var(--jade);height:28px}
 .volrow b{font-variant-numeric:tabular-nums;min-width:3ch;text-align:right}
+.guest-lock{position:fixed;inset:0;z-index:999;background:rgba(20,30,26,.92);display:grid;place-items:center;padding:20px}
+.gl-box{background:var(--paper);border-radius:20px;padding:20px 22px;max-width:420px;width:100%;display:grid;gap:12px}
+.gl-box h2{margin:0;font-family:var(--display);font-weight:400;font-size:28px;color:var(--cin)}
+.gl-box p{margin:0}
 /* ===== 手机竖屏 ===== */
 @media (max-width:520px){
   .home-top{padding-block:8px}
