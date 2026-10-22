@@ -4702,6 +4702,21 @@ const THEME = [
   { sky: ['#fff59d', '#fffde7'], far: '#ffe082', gnd: '#fff3c4', deco(w) { return city(w * .12, 340, 1, '#ef6c00') + `<path d="M${w * .34} 330 v-30 a18 18 0 0 1 36 0 v30 Z" fill="#212121" stroke="${O}" stroke-width="3"/>` + city(w * .52, 340, 1, '#c2185b') + temple(w * .84, 340, 1.6) + cloud(w * .76, 300, 1.3) + cloud(w * .92, 290, 1.1) + cloud(w * .84, 140, 1.4, '#fffde7') + `<circle cx="${w * .84}" cy="170" r="90" fill="#fff59d" opacity=".45"/>` + lotus(w * .7, 520, 1) + lotus(w * .96, 526, .8); } },
 ];
 
+// 白龙马（小白龙变的白马，配红鞍）
+const HORSE = `<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg"><g stroke="${O}" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+  <path d="M46 128 C30 132 22 150 26 172 C34 160 40 150 50 144 Z" fill="#eceff1"/>
+  <rect x="58" y="160" width="14" height="46" rx="6" fill="#fafafa"/><rect x="80" y="164" width="14" height="42" rx="6" fill="#eceff1"/>
+  <rect x="118" y="164" width="14" height="42" rx="6" fill="#eceff1"/><rect x="140" y="160" width="14" height="46" rx="6" fill="#fafafa"/>
+  <path d="M58 202 h14 M80 202 h14 M118 202 h14 M140 202 h14" stroke-width="7"/>
+  <ellipse cx="104" cy="148" rx="58" ry="30" fill="#fafafa"/>
+  <path d="M138 138 C146 112 150 96 158 84 L180 92 C176 108 166 126 156 150 Z" fill="#fafafa"/>
+  <path d="M150 78 C160 62 184 62 192 76 C198 88 194 100 184 104 L162 102 C154 96 150 88 150 78 Z" fill="#fafafa"/>
+  <path d="M158 66 L162 50 L170 64 Z" fill="#fafafa"/>
+  <path d="M154 74 C146 86 142 100 136 116 C142 104 146 96 152 92 C146 104 142 116 140 126" fill="none" stroke="#b0bec5" stroke-width="6"/>
+  <path d="M80 122 h48 l6 26 h-60 Z" fill="#c62828"/><path d="M78 148 h58" stroke="#f2b632" stroke-width="5"/>
+  <path d="M104 148 v20" stroke="#f2b632" stroke-width="3"/>
+</g><circle cx="180" cy="80" r="4" fill="${O}"/><circle cx="181" cy="79" r="1.4" fill="#fff"/><ellipse cx="190" cy="94" rx="2.4" ry="2" fill="${O}"/><ellipse cx="176" cy="90" rx="5" ry="3" fill="#ffcdd2"/></svg>`;
+
 // ---------- 布局 ----------
 function layout() {
   const chs = []; let x = 0, gi = 0;
@@ -4759,14 +4774,23 @@ function render() {
       <ellipse cx="${p.x}" cy="${p.y + 6}" rx="44" ry="18" fill="#000" opacity=".15"/>
       <circle cx="${p.x}" cy="${p.y}" r="30" fill="${done ? '#2f7d6b' : un ? '#f2b632' : '#9e9e9e'}" stroke="${O}" stroke-width="4"/>
       ${done ? `<path d="M${p.x - 12} ${p.y} l8 9 l16 -18" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>` : un ? `<text x="${p.x}" y="${p.y + 9}" text-anchor="middle" font-size="26" font-weight="900" fill="${O}">${i + 1}</text>` : `<path d="M${p.x - 9} ${p.y - 2} v-7 a9 9 0 0 1 18 0 v7" fill="none" stroke="#fff" stroke-width="4"/><rect x="${p.x - 13}" y="${p.y - 3}" width="26" height="18" rx="4" fill="#fff"/>`}
-      ${un ? sprite(boss, p.x, p.y - 34, 100, 'wm-boss') : `<g filter="url(#wm-sil)" opacity=".75">${sprite(boss, p.x, p.y - 34, 100, 'wm-boss')}</g>`}
+      ${done && (st.allies || []).includes(p.s.boss) ? '' : un ? sprite(boss, p.x, p.y - 34, 100, 'wm-boss') :`<g filter="url(#wm-sil)" opacity=".75">${sprite(boss, p.x, p.y - 34, 100, 'wm-boss')}</g>`}
       <rect x="${p.x - 62}" y="${p.y + 40}" width="124" height="30" rx="15" fill="${un ? '#fffaf0' : '#e0e0e0'}" stroke="${O}" stroke-width="2.5"/>
       <text x="${p.x}" y="${p.y + 62}" text-anchor="middle" font-size="18" fill="${O}" font-family="ZCOOL KuaiLe, sans-serif">${esc(p.s.n.length > 6 ? p.s.n.slice(0, 6) : p.s.n)}</text>
       ${done > 1 ? `<text x="${p.x + 34}" y="${p.y - 22}" font-size="15" font-weight="700" fill="#2f7d6b">×${done}</text>` : ''}
     </g>`;
   });
   // 师徒
-  const team = `<g class="wm-team"><g class="wm-bob">${sprite(C.tangseng(), -38, 0, 92)}${sprite(Q.Gear.wukong(), 30, 0, 100)}</g></g>`;
+  // 取经队伍：悟空打头；收了白龙马，唐僧就骑上马；收了八戒、沙僧，他们跟在后面
+  const al = S().allies || [];
+  const mem = (html, x, w, dl) => `<g class="wm-bob" style="animation-delay:-${dl}s">${sprite(html, x, 0, w)}</g>`;
+  let tm = mem(Q.Gear.wukong(), 30, 100, 0);
+  if (al.includes('bailong')) tm += `<g class="wm-bob" style="animation-delay:-.3s">${sprite(HORSE, -52, 0, 112)}${sprite(C.tangseng(), -46, -40, 84)}</g>`;
+  else tm += mem(C.tangseng(), -40, 92, .3);
+  let bx = al.includes('bailong') ? -140 : -112;
+  if (al.includes("bajie")) { tm += mem(C.bajie(), bx, 86, .6); bx -= 70; }
+  if (al.includes("shaseng")) tm += mem(C.shaseng(), bx, 86, .9);
+  const team = `<g class="wm-team">${tm}</g>`;
   g += team;
   return { svg: `<svg class="wm" viewBox="0 0 ${L.W} ${H}" width="${L.W}" height="${H}" xmlns="http://www.w3.org/2000/svg">${g}</svg>`, L, cur };
 }

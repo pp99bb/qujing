@@ -14,7 +14,7 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
-<link rel="stylesheet" href="style.css?v=6a54f56989">
+<link rel="stylesheet" href="style.css?v=29a1ffd42a">
 <style>html,body{margin:0;height:100%;background:#2f3b36;overscroll-behavior:none}body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}body.parent-app{-webkit-user-select:auto;user-select:auto}input,textarea{-webkit-user-select:text;user-select:text}</style>
 </head>
 <body>
@@ -80,8 +80,8 @@
   <div class="modal" id="boot" hidden><div class="empty"><h2>正在打开取经路……</h2><p>正在读取题库和进度</p></div></div>
 </div>
 
-<script>window.QJ_APP = 'parent'; window.QJ_BANK_URL = 'bank.json?v=6a54f56989';</script>
-<script src="game.js?v=6a54f56989"></script>
+<script>window.QJ_APP = 'parent'; window.QJ_BANK_URL = 'bank.json?v=29a1ffd42a';</script>
+<script src="game.js?v=29a1ffd42a"></script>
 <script>
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').then(r => {
   r.addEventListener('updatefound', () => { const w = r.installing; w && w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller && window.QJ && QJ.toast) QJ.toast('游戏有更新，下次打开就是新版本', 3500); }); });
