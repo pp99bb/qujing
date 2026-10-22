@@ -3533,18 +3533,21 @@ class Battle {
     if (this.mode === 'story' && !this.chest && SRS.isReview(this.cur) && this.foe && this.foe.hp > 0) {
       const mk = ['xiaozuanfeng', 'benbo', 'babo'][SRS.reviewLevel(this.cur)];
       if (this.miniKey !== mk) {
-        this.miniKey = mk; this.rEmpty = false; $('#bt-q').innerHTML = ''; this.renderHP();
-        ar.put(ar.R, C[mk]()); await ar.enter(ar.R, 1.4, 1300);
-        await an(ar.R.mover, [{ transform: 'none' }, { transform: 'translateY(-30px)' }, { transform: 'none' }, { transform: 'translateY(-18px)' }, { transform: 'none' }], 900, { fill: 'none' });
-        ar.caption(`错题小妖 ${name(mk)} 跳出来拦路：“上次做错的题，再考考你！”`); await sleep(2600); ar.caption('');
+        this.miniKey = mk; this.rEmpty = false; this.renderHP();
+        // 题目先显示出来（小妖站稳前先不让点），小妖一边说话孩子一边读题
+        this.renderQ(); this.qShown = true; $('#opts').classList.add('lock');
+        ar.caption(`错题小妖 ${name(mk)} 跳出来拦路：“上次做错的题，再考考你！”`); this.capT(3200);
+        ar.put(ar.R, C[mk]()); await ar.enter(ar.R, 1.4, 1100);
+        await an(ar.R.mover, [{ transform: 'none' }, { transform: 'translateY(-30px)' }, { transform: 'none' }, { transform: 'translateY(-18px)' }, { transform: 'none' }], 700, { fill: 'none' });
         if (!this.live) return;
+        if ($('#opts')) $('#opts').classList.remove('lock');
       }
     } else if (this.miniKey || this.rEmpty) {
       this.miniKey = null; this.rEmpty = false; ar.put(ar.R, enemySvg(this.foe.k)); await ar.enter(ar.R, 1, 800);
       ar.caption(`${name(this.foe.k)} 又挡在了前面！`); await sleep(1000); ar.caption('');
       if (!this.live) return;
     }
-    this.busy = false; this.renderHP(); this.renderSkills(); this.renderQ();
+    this.busy = false; this.renderHP(); this.renderSkills(); if (!this.qShown) this.renderQ(); this.qShown = false;
     if (this.cfg.tut && this.i === 0 && !Store.state.seenTut) toast('读一读题目，点你觉得对的答案，悟空就会出招！', 4000);
   }
   renderQ() {
@@ -3574,7 +3577,7 @@ class Battle {
     this.busy = true; this.renderSkills();
     const opts = $('#opts'); opts.classList.add('lock');
     const first = this.tries === 0; this.tries++;
-    if (first) { SRS.record(q, ok); this.answered++; if (ok) this.correct++; else this.wrongIds.add(q.id); }
+    if (first) { SRS.record(q, ok); this.answered++; if (ok) { this.correct++; Store.state.xp += 1; Store.save('state'); } else this.wrongIds.add(q.id); }
     if (ok) {
       $$('.opt').forEach(b => { if (q.ans.includes(+b.dataset.i)) b.classList.add('ok'); });
       Sfx.play('ok');
@@ -3853,7 +3856,7 @@ class Battle {
       if (outcome === 'ko') gold = Math.round(gold / 2);
     }
     if (this.mode === 'mirror' && win) gold += 40;
-    S.gold += gold; S.xp += this.correct;
+    S.gold += gold; // 修为在每次答对时就已经加过了，中途退出也算数
     S.hist.unshift({ d: Date.now(), mode: this.mode, t: this.cfg.title, n: this.answered, c: this.correct, w: [...this.wrongIds], r: outcome });
     S.hist = S.hist.slice(0, 120);
     Store.save('state'); Store.save('progress');
