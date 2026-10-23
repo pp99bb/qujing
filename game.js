@@ -3376,6 +3376,41 @@ const KP_HINT = {
 window.QJ_DATA = { E, GODS, GOD_COMMON, MOB_POOL, CH, BOSS_DROP, TITLES, KP_HINT };
 })();
 
+/* 取经小英雄 · 援军神仙的介绍、身份和能力（按《西游记》原著） */
+(function(){
+'use strict';
+// fx：dmg 伤害倍数（乘悟空攻击）；heal 回血比例；stun 定住妖怪（下次答错不挨打）；focus 棍势加满
+const G = {
+  rulai: { tag: '西天灵山 · 佛祖', story: '西天灵山雷音寺的佛祖，法力最大。当年悟空大闹天宫，翻了无数个筋斗也没翻出他的手掌心，被压在五行山下五百年。', fx: { dmg: 4 }, power: '佛掌压顶：伤害是攻击的 4 倍，所有援军里最强。' },
+  guanyin: { tag: '南海普陀山 · 菩萨', story: '南海普陀山的菩萨，取经的事就是她安排的。她给了悟空紧箍和三根救命毫毛，还收服了黑熊精、红孩儿。', fx: { dmg: 2, heal: .4 }, power: '杨柳净瓶：洒下甘露，悟空回血 40%，同时打妖怪 2 倍伤害。' },
+  yudi: { tag: '天庭 · 天帝', story: '天庭的主人。悟空先被他封了“弼马温”，嫌官小反下天宫，后来又封了“齐天大圣”。', fx: { dmg: 4 }, power: '天兵天将：伤害是攻击的 4 倍。' },
+  wangmu: { tag: '瑶池 · 天后', story: '住在瑶池，管着蟠桃园。悟空看守蟠桃园时偷吃了大桃子，还搅乱了她的蟠桃大会。', fx: { dmg: 2, heal: .5 }, power: '蟠桃仙果：悟空回血 50%，再打 2 倍伤害。' },
+  laojun: { tag: '兜率宫 · 道祖', story: '在兜率宫炼仙丹。他把悟空关进八卦炉烧了七七四十九天，没烧死，反而炼出了火眼金睛。金角、银角大王是他看炉子的童子。', fx: { dmg: 3, heal: .3 }, power: '金丹妙药：悟空回血 30%，再用金刚琢打 3 倍伤害。' },
+  taibai: { tag: '天庭 · 老神仙', story: '白胡子老神仙，两次下界请悟空上天当官，一路上还常常变成老人给取经队伍报信。', fx: { dmg: 3, focus: true }, power: '圣旨招安：打 3 倍伤害，还把悟空的棍势一下加满。' },
+  litianwang: { tag: '天庭 · 元帅', story: '手里托着一座玲珑宝塔，是哪吒的爸爸。当年他带十万天兵去花果山捉悟空。', fx: { dmg: 3, stun: true }, power: '宝塔镇妖：打 3 倍伤害，并把妖怪关住——下次答错妖怪也打不了你。' },
+  nezha: { tag: '天庭 · 三太子', story: '李天王的三儿子，能变成三头六臂，脚踩风火轮，手拿火尖枪和乾坤圈，和悟空打过好几回。', fx: { dmg: 3.5 }, power: '三头六臂：六件兵器一起上，伤害是攻击的 3.5 倍。' },
+  yangjian: { tag: '灌江口 · 真君', story: '额头上长着第三只眼，带着哮天犬。他和悟空斗变化，七十二变对七十二变，最后帮天庭捉住了悟空。', fx: { dmg: 3.5 }, power: '天眼神光：伤害是攻击的 3.5 倍。' },
+  chiguo: { tag: '南天门 · 东方天王', story: '四大天王之一，守护东方，手里拿着琵琶，弹一下就能让人站不稳。', fx: { dmg: 3 }, power: '琵琶震音：伤害是攻击的 3 倍。' },
+  zengzhang: { tag: '南天门 · 南方天王', story: '四大天王之一，守护南方，手拿青锋宝剑。', fx: { dmg: 3 }, power: '青锋宝剑：伤害是攻击的 3 倍。' },
+  guangmu: { tag: '南天门 · 西方天王', story: '四大天王之一，守护西方，手上缠着一条龙（也有人说是蛇），眼睛能看遍世界。', fx: { dmg: 3 }, power: '缠龙出击：伤害是攻击的 3 倍。' },
+  duowen: { tag: '南天门 · 北方天王', story: '四大天王之一，守护北方，手里撑着一把宝伞，一打开就天昏地暗。', fx: { dmg: 3 }, power: '混元宝伞：伤害是攻击的 3 倍。' },
+  juling: { tag: '天庭 · 大力神', story: '个子特别高大，拿着两把大板斧。他是第一个下界去打悟空的天将，结果被悟空一棍打败。', fx: { dmg: 3 }, power: '开山巨斧：伤害是攻击的 3 倍。' },
+  longwang: { tag: '东海龙宫 · 龙王', story: '悟空的如意金箍棒就是从他的东海龙宫拿走的。车迟国比赛求雨时，他帮悟空降了大雨。', fx: { dmg: 3 }, power: '翻江倒海：伤害是攻击的 3 倍。' },
+  leigong: { tag: '天庭 · 雷神', story: '负责打雷的神仙，尖嘴、长翅膀，拿着锤子和凿子。车迟国求雨时听悟空的号令打雷。', fx: { dmg: 3 }, power: '五雷轰顶：伤害是攻击的 3 倍。' },
+  dianmu: { tag: '天庭 · 闪电女神', story: '负责闪电的女神，手里拿着两面镜子，一照就是一道闪电。', fx: { dmg: 3 }, power: '金光电镜：伤害是攻击的 3 倍。' },
+  zhenyuan: { tag: '万寿山五庄观 · 地仙之祖', story: '五庄观的主人，种着三千年开花、三千年结果的人参果树。悟空推倒了他的果树，后来请观音救活，两人结拜成兄弟。', fx: { heal: .5, dmg: 2 }, power: '人参果：悟空回血 50%，再用袖里乾坤打 2 倍伤害。' },
+  shouxing: { tag: '南极 · 寿星老人', story: '额头高高的老寿星，骑着白鹿。比丘国的白鹿精就是他的坐骑偷跑下界变的。', fx: { heal: .4, dmg: 2 }, power: '延年仙桃：悟空回血 40%，再打 2 倍伤害。' },
+  wenshu: { tag: '五台山 · 菩萨', story: '代表智慧的菩萨，骑着青毛狮子。乌鸡国和狮驼岭的狮子精，都是他的坐骑跑下界变的。', fx: { dmg: 3 }, power: '智慧剑：伤害是攻击的 3 倍。' },
+  puxian: { tag: '峨眉山 · 菩萨', story: '骑着六牙白象的菩萨。狮驼岭会用长鼻子卷人的二大王，就是他的白象。', fx: { dmg: 3 }, power: '白象踏地：伤害是攻击的 3 倍。' },
+  mile: { tag: '灵山 · 未来佛', story: '大肚子、笑眯眯。小雷音寺的黄眉大王是他敲磬的童子，偷了他的人种袋下界作怪。', fx: { dmg: 3, stun: true }, power: '人种袋：打 3 倍伤害，并把妖怪装进袋子——下次答错妖怪也打不了你。' },
+  maori: { tag: '天庭 · 星官', story: '本相是一只大公鸡。他在毒敌山叫了一声，就把蝎子精制服了。', fx: { dmg: 3 }, power: '金鸡报晓：伤害是攻击的 3 倍。' },
+  lingji: { tag: '小须弥山 · 菩萨', story: '有一颗定风丹和一根飞龙宝杖。黄风怪吹三昧神风时，就是他出手降服的。', fx: { dmg: 3, stun: true }, power: '定风丹：打 3 倍伤害，再把妖怪定住——下次答错妖怪也打不了你。' },
+  tudi: { tag: '各地 · 土地神', story: '个子矮矮的白胡子老爷爷。悟空每到一个地方不认路，就用金箍棒敲敲地，把他叫出来问路。', fx: { dmg: 2, heal: .2 }, power: '指路小帮手：悟空回血 20%，再打 2 倍伤害。' },
+  change: { tag: '月宫 · 仙子', story: '住在月亮上的仙子，养着玉兔。天竺国假公主就是她的玉兔偷偷下界变的。', fx: { heal: .3, dmg: 2 }, power: '月华清辉：悟空回血 30%，再打 2 倍伤害。' },
+};
+window.QJ_GODINFO = G;
+})();
+
 /* 取经小英雄 · 火眼金睛用的小知识库：诗人特点、诗文大意、写字的部件顺序 */
 (function(){
 'use strict';
@@ -4187,6 +4222,7 @@ class Battle {
       if (this.flags.dingArmed) {
         this.flags.dingArmed = false; this.ar.caption('定身术！妖怪被定住了，再选一次吧'); Sfx.fx('ding');
         $$('.opt.bad').forEach(b => { b.classList.remove('bad'); b.classList.add('gone'); });
+        $$('.opt.dinged').forEach(b => b.classList.remove('dinged'));
         an(this.ar.R.mover, [{ filter: 'none' }, { filter: 'grayscale(1) brightness(1.3)' }, { filter: 'none' }], 1200, { fill: 'none' });
         opts.classList.remove('lock'); this.selected = new Set(); if ($('#confirm')) $('#confirm').disabled = true;
         this.busy = false; this.renderSkills(); this.capT(3500); return;
@@ -4278,6 +4314,7 @@ class Battle {
   }
   async enemyHits() {
     const ar = this.ar, k = this.miniKey || (this.foe && this.foe.k); if (!k || !MV[k]) return;
+    if (this.flags.stunned && !this.miniKey) { this.flags.stunned = false; ar.caption(`${name(k)}还被定着，动不了！`); await sleep(1400); ar.caption(''); return; }
     const f = this.foe; let atk = this.miniKey ? Math.max(7, Math.round((f ? f.atk : 9) * .7)) : f.atk;
     if (this.st.acc === 'acc_dingfeng' && k === 'huangfeng') atk = Math.round(atk / 2);
     // 防御最多挡掉一大半，但总会掉血，装备再好也得认真答题
@@ -4420,7 +4457,15 @@ class Battle {
       pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
       an(ar.L.svg, [{ filter: 'none' }, { filter: 'drop-shadow(0 0 12px #f5b800)' }, { filter: 'none' }], 900, { fill: 'none' });
     }
-    if (k === 'ding' && this.sk.ding > 0 && !this.flags.dingArmed) { this.sk.ding--; this.flags.dingArmed = true; ar.caption('定身术准备好了：这题答错可以再选一次'); this.capT(3500); }
+    if (k === 'ding' && this.sk.ding > 0 && !this.flags.dingArmed) {
+      this.sk.ding--; this.flags.dingArmed = true; Sfx.fx('ding');
+      const d = document.createElement('div'); d.className = 'dingpop';
+      d.innerHTML = `<div class="dp-wk">${Gear.wukong()}<i class="dp-hand"></i></div><div class="dp-seal"><b>定</b></div><p>定身法！这题答错了，还能再选一次</p>`;
+      document.body.appendChild(d); setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 350); }, window.QJ_FAST ? 100 : 1700);
+      $$('#bt-q .opt').forEach((o, i) => { o.style.animationDelay = (i * .12) + 's'; o.classList.add('dinged'); });
+      ar.caption('定身术准备好了：这题答错可以再选一次'); this.capT(3500);
+      an(ar.R.mover, [{ filter: 'none' }, { filter: 'drop-shadow(0 0 10px #ffd54f) grayscale(.6)' }, { filter: 'none' }], 1600, { fill: 'none' });
+    }
     if (k === 'gourd' && this.sk.gourd > 0) {
       if (this.hp >= this.maxhp) { toast('气血是满的，先留着吧'); return; }
       this.sk.gourd--; this.heal(Math.round(this.maxhp * .4));
@@ -4428,28 +4473,42 @@ class Battle {
     if (k === 'bajie' && this.sk.bajie > 0) {
       const wrong = $$('.opt').filter(b => !q.ans.includes(+b.dataset.i) && !b.classList.contains('gone'));
       if (wrong.length < 2 && q.ans.length === 1 && wrong.length < 1) return;
-      this.sk.bajie--; const w = pick(wrong); w.classList.add('gone');
+      this.sk.bajie--; this.busy = true; await this.cutin('bajie', '悟空：呆子，快来帮忙！'); this.busy = false; const w = pick(wrong); w.classList.add('gone');
       const r = w.getBoundingClientRect(); this.flyText(r, '八戒：钉耙一扫！');
     }
-    if (k === 'shaseng' && this.sk.shaseng > 0) { this.sk.shaseng--; this.flags.shasengArmed = true; ar.caption('沙僧：宝杖助阵！这题答对伤害翻倍'); this.capT(3500); }
+    if (k === 'shaseng' && this.sk.shaseng > 0) { this.sk.shaseng--; this.busy = true; await this.cutin('shaseng', '悟空：沙师弟，助我一阵！'); this.busy = false; this.flags.shasengArmed = true; ar.caption('沙僧：宝杖助阵！这题答对伤害翻倍'); this.capT(3500); }
     if (k === 'heavy' && this.focus >= 4) {
       if (this.chest || this.rEmpty || (!this.miniKey && !(this.foe && this.foe.hp > 0))) { toast(this.chest ? '开宝箱的时候不能用重棍哦' : '现在没有可以打的妖怪'); return; }
       this.focus = 0; this.busy = true; this.renderSkills();
       if (this.miniKey) { await this.hitEnemy(); } else await this.strike('heavy', null, '重棍！');
       this.busy = false; if (this.foes.every(f => f.hp <= 0) && !this.chest) { this.renderSkills(); return this.next(); }
     }
-    if (k === 'bailong' && this.sk.bailong > 0) { this.sk.bailong--; await this.helper('bailong', 1.5, '小白龙：白龙出水！'); }
+    if (k === 'bailong' && this.sk.bailong > 0) { this.sk.bailong--; await this.helper('bailong', 1.5, '小白龙：白龙出水！', '悟空：小白龙，快来帮我一把！'); }
     if (k === 'card' && this.sk.card > 0) return this.pickCard();
     this.renderSkills();
   }
+  // 召唤特写：画面变暗 → “悟空呼叫……” → 伙伴/神仙大特写
+  async cutin(k, line) {
+    const GI = (window.QJ_GODINFO || {})[k], god = !!DATA.GODS[k];
+    const d = document.createElement('div'); d.className = 'cutin' + (god ? ' god' : '');
+    d.innerHTML = `<div class="ci-call"><span class="ci-wk">${Gear.wukong()}</span><p>${esc(line)}</p></div>
+      <div class="ci-band"><i class="ci-lines"></i><span class="ci-hero">${C[k]()}</span><div class="ci-name"><b>${esc(name(k))}</b>${GI ? `<small>${esc(GI.tag)}</small>` : ''}</div></div>`;
+    document.body.appendChild(d);
+    if (god) Sfx.fx('god'); else Sfx.cry(k);
+    await sleep(window.QJ_FAST ? 200 : 2100); d.classList.add('out'); await sleep(window.QJ_FAST ? 50 : 300); d.remove();
+  }
   flyText(r, t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; d.style.position = 'fixed'; d.style.left = (r.left + r.width / 2) + 'px'; d.style.top = r.top + 'px'; d.style.bottom = 'auto'; document.body.appendChild(d); setTimeout(() => d.remove(), 1200); }
-  async helper(k, mult, label) {
+  async helper(k, mult, label, call, fx = {}) {
     const ar = this.ar; if (!this.foe || this.foe.hp <= 0 || this.miniKey) { toast('现在没有可以打的妖怪'); return; }
     this.busy = true; this.renderSkills();
+    await this.cutin(k, call || `悟空：${name(k)}，快来帮忙！`); if (!this.live) return;
     ar.caption(label); ar.put(ar.L, C[k]()); await ar.enter(ar.L);
+    if (fx.heal) { this.heal(Math.round(this.maxhp * fx.heal)); await sleep(500); }
     const d = Math.round(this.tot.atk * mult); ar.nextDmg = { text: '-' + d, crit: false };
     await MV[k].run(ar, ar.L, ar.R); ar.L.fresh(); ar.R.fresh();
     this.foe.hp = Math.max(0, this.foe.hp - d); this.renderHP();
+    if (fx.stun && this.foe.hp > 0) { this.flags.stunned = true; ar.caption(`${name(this.foe.k)}被定住了！下次答错它也打不了你`); await sleep(1400); }
+    if (fx.focus) { this.focus = 4; Sfx.fx('ready'); }
     await an(ar.L.mover, [{ transform: 'none', opacity: 1 }, { transform: `translateX(${-200}px)`, opacity: 0 }], 400);
     ar.put(ar.L, Gear.wukong()); await ar.enter(ar.L); ar.caption('');
     if (this.foe.hp <= 0) await this.defeat();
@@ -4461,11 +4520,12 @@ class Battle {
     const cards = Object.entries(Store.state.cards || {}).filter(([, v]) => v > 0);
     const m = $('#modal'); m.hidden = false;
     $('#modal .mbox').innerHTML = `<button type="button" class="x" aria-label="关闭">×</button><h2>召唤援军</h2><p>每场战斗可以召唤一位神仙。召唤后这张卡的次数减 1。</p>
-      <div class="grid">${cards.map(([k, v]) => `<button type="button" class="card" data-g="${k}">${C[k]()}<b>${DATA.GODS[k]}</b><small>还能用 ${v} 次 · ${MV[k] ? MV[k].name : ''}</small></button>`).join('')}</div>`;
+      <div class="grid">${cards.map(([k, v]) => `<button type="button" class="card" data-g="${k}">${C[k]()}<b>${DATA.GODS[k]}</b><small>还能用 ${v} 次 · ${MV[k] ? MV[k].name : ''}</small>${(window.QJ_GODINFO || {})[k] ? `<small class="pw">${esc(window.QJ_GODINFO[k].power.split('：')[1] || '')}</small>` : ''}</button>`).join('')}</div>`;
     $('#modal .x').onclick = () => m.hidden = true;
     $$('#modal [data-g]').forEach(b => b.onclick = async () => {
       m.hidden = true; const g = b.dataset.g; Store.state.cards[g]--; this.sk.card--; Store.save('state');
-      await this.helper(g, 3, `${DATA.GODS[g]} 前来助阵！`);
+      const GI = (window.QJ_GODINFO || {})[g] || { fx: { dmg: 3 } };
+      await this.helper(g, GI.fx.dmg || 3, `${DATA.GODS[g]} 前来助阵！`, `悟空：请${DATA.GODS[g]}助我一臂之力！`, GI.fx);
     });
   }
   // ---------- 结束 ----------
@@ -4681,7 +4741,13 @@ function openCards() {
 document.addEventListener('click', e => {
   const c = e.target.closest('#cards-grid .card'); if (!c) return; const k = c.dataset.g, f = S().frags[k] || 0, u = S().cards[k] || 0;
   if (!f && !u) return toast('还没有这位神仙的碎片：打败 Boss、复习错题都有机会获得');
-  demoModal(DATA.GODS[k], `<p>碎片 ${f}/3 · 可用 ${u} 次。攒够 3 个碎片就多 3 次召唤。战斗中点“援军卡”召唤，每场一次，伤害是攻击的 3 倍。</p>`, MV[k] ? k : null, 'heixiong');
+  const GI = (window.QJ_GODINFO || {})[k] || {};
+  demoModal(DATA.GODS[k], `<div class="god-info">
+      ${GI.tag ? `<span class="god-tag">${esc(GI.tag)}</span>` : ''}
+      ${GI.story ? `<div class="god-sec"><b>在《西游记》里</b><p>${esc(GI.story)}</p></div>` : ''}
+      <div class="god-sec"><b>招式</b><p>${esc(MV[k] ? MV[k].name : '—')}</p></div>
+      ${GI.power ? `<div class="god-sec pw"><b>召唤能力</b><p>${esc(GI.power)}</p></div>` : ''}
+      <div class="god-sec"><b>我的援军卡</b><p>碎片 ${f}/3 · 还能召唤 ${u} 次。攒够 3 个碎片就多 3 次召唤；战斗里点“援军卡”召唤，每场一次。</p></div></div>`, MV[k] ? k : null, 'heixiong');
 });
 
 // ================= 左下角小齿轮：声音、同步码、重置进度 =================

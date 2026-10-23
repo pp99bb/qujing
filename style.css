@@ -156,6 +156,46 @@ h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance}
 .eye-ok{justify-self:center;min-width:min(240px,70%);font-size:clamp(18px,3vmin,26px)}
 @media (orientation:portrait), (max-width:700px){.eye-in{grid-template-columns:1fr}.eye-wk{width:min(170px,40vw)}.eye-beam{display:none}}
 @media (prefers-reduced-motion: reduce){.eye-fire .ef,.eye-beam{animation:none}}
+/* 援军介绍 */
+.god-info{display:grid;gap:10px}
+.god-tag{justify-self:start;background:#8d2c1f;color:#fff8dc;border-radius:99px;padding:2px 12px;font-size:14px}
+.god-sec{background:#fff;border-radius:14px;padding:10px 14px;border:1px solid var(--line)}
+.god-sec b{display:block;font-family:var(--display);font-weight:400;font-size:18px;color:var(--jade)}
+.god-sec p{margin:2px 0 0;font-size:clamp(15px,2.4vmin,19px);line-height:1.6}
+.god-sec.pw{background:#fff8e1;border-color:#e8b33a}.god-sec.pw b{color:#c0392b}
+/* 召唤特写 */
+.cutin{position:fixed;inset:0;z-index:118;pointer-events:none;background:rgba(10,14,20,.78);animation:tfade .25s ease-out;overflow:hidden}
+.cutin.out{transition:opacity .3s;opacity:0}
+.ci-call{position:absolute;left:4%;top:8%;display:flex;align-items:center;gap:10px;animation:ciCall .4s ease-out}
+.ci-wk svg{width:min(110px,22vmin);height:auto}
+.ci-call p{margin:0;background:#fffaf0;color:#3a2618;border-radius:16px;padding:10px 16px;font-weight:900;font-size:clamp(16px,3.2vmin,28px);box-shadow:0 4px 0 rgba(0,0,0,.2)}
+@keyframes ciCall{from{transform:translateX(-40px);opacity:0}}
+.ci-band{position:absolute;left:-10%;right:-10%;top:42%;height:clamp(150px,34vmin,300px);transform:translateY(-30%) skewY(-6deg);background:linear-gradient(90deg,#c62828,#ff7043 45%,#ffca28);box-shadow:0 0 0 6px #fff,0 0 40px rgba(255,193,7,.6);animation:ciBand .45s .35s cubic-bezier(.2,1.3,.5,1) both;overflow:hidden}
+.cutin.god .ci-band{background:linear-gradient(90deg,#1a237e,#5c6bc0 45%,#ffd54f)}
+@keyframes ciBand{from{transform:translateY(-30%) skewY(-6deg) scaleX(0)}}
+.ci-lines{position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 30px,rgba(255,255,255,.25) 30px 34px);animation:ciLines .3s linear infinite}
+@keyframes ciLines{to{background-position:-64px 0}}
+.ci-hero{position:absolute;right:16%;top:50%;transform:translateY(-50%) skewY(6deg);animation:ciHero .5s .55s cubic-bezier(.2,1.4,.5,1) both}
+.ci-hero svg{width:clamp(150px,32vmin,300px);height:auto;filter:drop-shadow(0 6px 0 rgba(0,0,0,.25))}
+@keyframes ciHero{from{transform:translate(60vw,-50%) skewY(6deg)}}
+.ci-name{position:absolute;left:16%;top:50%;transform:translateY(-50%) skewY(6deg);color:#fff;animation:ciName .4s .7s ease-out both}
+.ci-name b{display:block;font-family:var(--display);font-weight:400;font-size:clamp(32px,7vmin,72px);-webkit-text-stroke:3px #3a2618;paint-order:stroke;text-shadow:0 4px 0 #3a2618}
+.ci-name small{font-size:clamp(14px,2.6vmin,22px);font-weight:900;text-shadow:0 2px 0 #3a2618}
+@keyframes ciName{from{transform:translate(-40px,-50%) skewY(6deg);opacity:0}}
+/* 定身术 */
+.dingpop{position:fixed;inset:0;z-index:117;pointer-events:none;display:grid;place-items:center;align-content:center;gap:10px;background:radial-gradient(circle,rgba(255,236,179,.35),rgba(20,20,10,.55));animation:tfade .2s}
+.dingpop.out{transition:opacity .35s;opacity:0}
+.dp-wk{position:relative}.dp-wk svg{width:min(180px,30vmin);height:auto;animation:dpBob .5s ease-out}
+@keyframes dpBob{from{transform:scale(.6)}}
+.dp-hand{position:absolute;right:8%;top:42%;width:28px;height:28px;border-radius:50%;background:radial-gradient(#fff59d,#ffb300);box-shadow:0 0 18px 8px rgba(255,213,79,.8);animation:dpHand .6s ease-in-out infinite alternate}
+@keyframes dpHand{to{transform:scale(1.4)}}
+.dp-seal{width:clamp(110px,22vmin,180px);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:#fff8dc;border:8px solid #d1452f;box-shadow:0 0 0 6px #e8b33a,0 0 40px rgba(255,193,7,.9);animation:dpSeal .55s .25s cubic-bezier(.3,1.6,.5,1) both;margin-top:-40px}
+.dp-seal b{font-family:serif;font-size:clamp(60px,13vmin,110px);color:#d1452f;line-height:1}
+@keyframes dpSeal{from{transform:scale(2.6) rotate(-30deg);opacity:0}}
+.dingpop p{margin:0;background:#fffaf0;border-radius:14px;padding:8px 16px;font-weight:900;font-size:clamp(16px,3vmin,26px);color:#3a2618}
+.opt.dinged{animation:dingGlow 1.6s ease-in-out infinite;border-color:#e8b33a}
+@keyframes dingGlow{0%,100%{box-shadow:0 0 0 2px rgba(232,179,58,.5),0 3px 0 rgba(0,0,0,.08)}50%{box-shadow:0 0 0 5px rgba(232,179,58,.9),0 0 22px rgba(255,213,79,.9)}}
+@media (prefers-reduced-motion: reduce){.ci-lines,.opt.dinged,.dp-hand{animation:none}}
 /* 唐僧小黑板 */
 .teach{position:fixed;inset:0;z-index:120;background:rgba(20,30,26,.84);display:grid;place-items:center;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));animation:tfade .25s ease-out}
 @keyframes tfade{from{opacity:0}}
@@ -223,7 +263,9 @@ h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance}
 
 /* ---------- 列表类页面 ---------- */
 .page{background:var(--paper2)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;padding-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(140px,19vw,240px),1fr));gap:14px;padding-bottom:20px}
+.card svg{width:min(150px,80%);height:auto;aspect-ratio:200/220}
+.card .pw{color:#8d2c1f;font-size:12px;line-height:1.35}
 .card{border:none;background:#fff;border-radius:16px;padding:8px;display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 3px 0 rgba(0,0,0,.08);min-width:0;text-align:center}
 .card svg{width:110px;height:121px;overflow:visible}
 .card b{font-family:var(--display);font-weight:400;font-size:18px}.card small{color:var(--mute);font-size:12px}
