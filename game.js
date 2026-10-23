@@ -3438,6 +3438,7 @@ const PEOPLE = {
   '周敦颐': '宋朝的学者，最爱莲花，说它从淤泥里长出来却一点不脏。',
   '范仲淹': '宋朝的大臣，写过“先天下之忧而忧，后天下之乐而乐”。',
   '王勃': '唐朝初年的少年天才，二十多岁就写出了“落霞与孤鹜齐飞”。',
+  '刘禹锡': '唐朝诗人，被称为“诗豪”，是白居易的好朋友，写过洞庭湖和黄河的诗。',
   '吴承恩': '明朝的小说家，写了唐僧师徒去西天取经的故事。',
 };
 // 诗文的大意（不出现题目里的字）
@@ -3472,6 +3473,13 @@ const WORKS = {
   '惠崇春江晚景': '竹林外桃花开了两三枝，春天的江水变暖了，鸭子最先知道。',
   '咏鹅': '一只大白鹅弯着脖子向天唱歌，白羽毛浮在绿水上，红红的脚掌拨着清清的水波。',
   '登鹳雀楼': '太阳靠着山慢慢落下，黄河向大海流去；想看到千里以外，就要再登上一层楼。',
+  '山行': '诗人坐车走在秋天的山路上，看见白云深处有人家，停下车欣赏傍晚的枫林，经霜的叶子比二月的花还红。',
+  '望洞庭': '秋夜的湖面和月光融在一起，没有风，像一面没磨过的镜子；远看湖里的君山，像白银盘里放着一只青螺。',
+  '使至塞上': '诗人奉命出使到边塞，看见大沙漠里一道烟直直升起，长长的黄河上落日圆圆的。',
+  '过故人庄': '老朋友准备了鸡和黄米饭，请诗人去农家做客，绿树围着村子，大家边喝酒边聊庄稼。',
+  '琵琶行': '一首很长的诗：诗人在江边送客，听一位弹琵琶的女子弹曲子、讲她的身世。',
+  '长恨歌': '一首很长的诗，讲唐玄宗和杨贵妃的故事。',
+  '大林寺桃花': '四月山下的花都谢了，山上寺庙里的桃花才刚开，诗人惊喜地发现春天原来跑到山上来了。',
   '爱莲说': '一篇文章，赞美莲花从淤泥里长出来却不被弄脏，用它比喻品格高洁的人。',
   '岳阳楼记': '一篇文章，写洞庭湖边一座名楼的风景，讲“先替天下人担忧，后和天下人一起快乐”。',
   '滕王阁序': '一篇文章，写江西一座名楼的秋景：晚霞和野鸭一起飞，秋水和长天一个颜色。',
@@ -3562,7 +3570,8 @@ function make(q) {
     if (!list) { const ms = String(q.exp || '').match(/[横竖撇点捺提折钩弯卧平斜]+(?:、[横竖撇点捺提折钩弯卧平斜]+)+/g); if (ms) list = ms.join('、').split('、'); }
     const parts = (D.PARTS || {})[ch] || '';
     let tip = parts ? `“${ch}”要${parts}` : '';
-    if (list && list.length >= N && N > 1) tip += (N === 2 ? `第一笔是${list[0]}。` : `前面${N - 1 === 2 ? '两' : NUM[N - 1]}笔依次是：${list.slice(0, N - 1).join('、')}。`) + `接下来写的那一笔，就是第${sn[1]}笔。`;
+    if (list && list.length >= N && N > 1 && list.slice(0, N - 1).includes(list[N - 1])) tip += `前面已经写了${N - 1 === 2 ? '两' : NUM[N - 1]}笔，用手指在桌上把“${ch}”慢慢写一遍，数到第${sn[1]}笔停下来。`;
+    else if (list && list.length >= N && N > 1) tip += (N === 2 ? `第一笔是${list[0]}。` : `前面${N - 1 === 2 ? '两' : NUM[N - 1]}笔依次是：${list.slice(0, N - 1).join('、')}。`) + `接下来写的那一笔，就是第${sn[1]}笔。`;
     else if (N === 1) tip += `笔顺口诀：从上到下、从左到右、先横后竖、先撇后捺、点在上面先写点。看看“${ch}”最先落笔在哪儿。`;
     else tip += `用手指在桌上把“${ch}”慢慢写一遍，数到第${sn[1]}笔停下来。`;
     return tip;
@@ -3766,15 +3775,23 @@ const SRS = {
     if (o.only) pool = pool.filter(o.only);
     if (!pool.length) return [];
     const focus = Store.settings.focusKp || [];
-    const recent = pool.filter(q => this.recentOk(q)).sort((x, y) => (this.rec(x.id).ls || 0) - (this.rec(y.id).ls || 0));
-    pool = pool.filter(q => !this.recentOk(q));
-    const due = shuffle(pool.filter(q => this.isDue(q))).sort((a, b) => (this.isReview(b) - this.isReview(a)) || ((this.rec(a.id) || {}).due || 0) - ((this.rec(b.id) || {}).due || 0));
-    const fresh = shuffle(pool.filter(q => !this.rec(q.id) && !this.isDue(q))).sort((a, b) => (focus.includes(b.kp) - focus.includes(a.kp)) || ((a.d || 1) - (b.d || 1)));
-    const known = pool.filter(q => { const r = this.rec(q.id); return r && !this.isDue(q); }).sort((a, b) => (focus.includes(b.kp) - focus.includes(a.kp)) || ((this.rec(a.id).ls || 0) - (this.rec(b.id).ls || 0)) || (Math.random() - .5));
     const take = (arr, k, out) => { while (k-- > 0 && arr.length) { const q = arr.shift(); if (!out.includes(q)) out.push(q); } };
+    // 从一堆题里按“复习错题 → 新题 → 很久没见的旧题 → 最近答对过的”挑 k 道
+    const fill = (P, k, out) => {
+      const recent = P.filter(q => this.recentOk(q)).sort((x, y) => (this.rec(x.id).ls || 0) - (this.rec(y.id).ls || 0));
+      const rest = P.filter(q => !this.recentOk(q) && !out.includes(q));
+      const due = shuffle(rest.filter(q => this.isDue(q))).sort((a, b) => (this.isReview(b) - this.isReview(a)) || ((this.rec(a.id) || {}).due || 0) - ((this.rec(b.id) || {}).due || 0));
+      const fresh = shuffle(rest.filter(q => !this.rec(q.id) && !this.isDue(q))).sort((a, b) => (focus.includes(b.kp) - focus.includes(a.kp)) || ((a.d || 1) - (b.d || 1)));
+      const known = rest.filter(q => { const r = this.rec(q.id); return r && !this.isDue(q); }).sort((a, b) => (focus.includes(b.kp) - focus.includes(a.kp)) || ((this.rec(a.id).ls || 0) - (this.rec(b.id).ls || 0)) || (Math.random() - .5));
+      const goal = out.length + k;
+      take(due, Math.ceil(k * .3), out); take(fresh, goal - out.length, out); take(known, goal - out.length, out);
+      take(due, goal - out.length, out); take(recent, goal - out.length, out);
+    };
     const out = [];
-    take(due, Math.ceil(n * .3), out); take(fresh, n - out.length, out); take(known, n - out.length, out);
-    take(due, n - out.length, out); take(recent, n - out.length, out);
+    // 近期考点（focus）占 70%，其余 30% 照常从整个题库出
+    const F = pool.filter(q => q.focus), O = pool.filter(q => !q.focus);
+    if (F.length && O.length && !o.noFocus) { fill(F, Math.round(n * .7), out); fill(O, n - out.length, out); fill(F, n - out.length, out); }
+    else fill(pool, n, out);
     // 开头放两道最有把握的题
     const easyFirst = out.slice().sort((a, b) => this.ease(b) - this.ease(a)).slice(0, 2);
     const rest = shuffle(out.filter(q => !easyFirst.includes(q)));

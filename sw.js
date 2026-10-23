@@ -1,6 +1,6 @@
 /* 取经小英雄 · 离线缓存。版本号随内容变化，换新版本时自动更新缓存 */
-const VER = 'qj-6cf5904c37';
-const SHELL = ["./", "index.html", "parent.html", "game.js?v=6cf5904c37", "style.css?v=6cf5904c37", "bank.json?v=6cf5904c37", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
+const VER = 'qj-8ca7b9fcdb';
+const SHELL = ["./", "index.html", "parent.html", "game.js?v=8ca7b9fcdb", "style.css?v=8ca7b9fcdb", "bank.json?v=8ca7b9fcdb", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VER).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VER && k !== 'qj-fonts').map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
