@@ -4013,7 +4013,8 @@ const { C, MV, G, DATA, Arena, an, clear, sleep, rnd, $, $$, esc, today, shuffle
 // ---------- 演武场工具 ----------
 function makeArena(root) {
   const ar = new Arena(root);
-  ar.fit = () => { const w = root.clientWidth, h = root.clientHeight; root.style.setProperty('--s', Math.max(.45, Math.min(1.15, w / (w < 600 ? 540 : 820), (h - 80) / 220)).toFixed(3)); };
+  ar.fit = () => { const w = root.clientWidth, h = root.clientHeight; if (!w || !h) return; root.style.setProperty('--s', Math.max(.45, Math.min(1.6, w / (w < 600 ? 540 : 700), (h - 84) / 220)).toFixed(3)); };
+  if (window.ResizeObserver) new ResizeObserver(() => ar.fit()).observe(root);
   // 换角色时直接换一套新的容器，彻底甩掉上一个招式残留的位移
   ar.put = (f, html) => { f.reset(); const m = document.createElement('div'), fl = document.createElement('div'); m.className = 'mover'; fl.className = 'flip'; m.appendChild(fl); f.mover.replaceWith(m); f.mover = m; f.flip = fl; fl.innerHTML = html; f._t = null; };
   ar.enter = (f, from = 1, dur = 520) => an(f.mover, [{ transform: `translateX(${f.dir * -from * 260}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], dur, { easing: 'cubic-bezier(.3,1.3,.5,1)', fill: 'none' });

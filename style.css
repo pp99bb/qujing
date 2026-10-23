@@ -476,6 +476,18 @@ body[data-screen="battle"] .gearbtn,body[data-screen="parent"] .gearbtn,body.par
 /* 题目和选项按屏幕大小自动变大变小（手机 → 平板 → 电脑） */
 .qtext{font-size:clamp(19px,4.1vmin,40px)}
 .opt{font-size:clamp(17px,3.3vmin,32px)}
+/* ===== 战斗页布局：题目区按内容需要的高度留，剩下的全给战场（不再留大片空白） ===== */
+#battle .arena{flex:1 1 0;height:auto;min-height:150px}
+#battle .qpanel{flex:0 0 auto;min-height:44vh;max-height:64vh}
+@media (orientation:landscape){#battle .qpanel{min-height:30vh}}
+@media (max-width:600px){#battle .arena{flex:none;height:34vh;min-height:220px}#battle .qpanel{flex:1 1 0;min-height:0;max-height:none}}
+@media (orientation:landscape) and (min-width:900px){
+  .qtext{font-size:clamp(22px,4.6vmin,46px)}
+  .opt{font-size:clamp(19px,3.9vmin,38px);min-height:clamp(60px,10vmin,96px)}
+  .opt .lt{width:clamp(30px,5vmin,44px);height:clamp(30px,5vmin,44px);font-size:clamp(16px,2.6vmin,22px)}
+  .tag{font-size:clamp(13px,2.2vmin,18px)}
+  .hint{font-size:clamp(16px,3vmin,26px)}
+}
 /* ===== 手机竖屏 ===== */
 @media (max-width:520px){
   .home-top{padding-block:8px}
