@@ -140,6 +140,22 @@ h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance}
 .hint b{flex:none;color:#fff;background:#d1452f;border-radius:8px;padding:0 8px;font-size:.85em}
 .opt.burn{animation:burn .9s ease-in forwards;pointer-events:none}
 @keyframes burn{0%{filter:none}30%{box-shadow:0 0 0 4px #ff7043,0 0 24px #ff9800;background:#fff3e0}100%{opacity:.2;filter:grayscale(1) blur(1px);transform:scale(.96)}}
+/* 火眼金睛弹窗 */
+.eyepop{position:fixed;inset:0;z-index:115;background:rgba(40,12,0,.78);display:grid;place-items:center;padding:16px;animation:tfade .2s ease-out}
+.eye-in{width:min(980px,100%);display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,2.2fr);gap:16px;align-items:center;animation:tpop .35s cubic-bezier(.3,1.4,.5,1)}
+.eye-wk{position:relative;justify-self:center;width:min(260px,32vmin)}
+.eye-wk > svg:first-child{width:100%;height:auto;overflow:visible;filter:drop-shadow(0 0 18px rgba(255,152,0,.6))}
+.eye-fire{position:absolute;inset:0;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 8px #ff9800)}
+.eye-fire .ef{animation:flick .35s ease-in-out infinite alternate}
+.eye-beam{position:absolute;left:58%;top:36%;width:60vw;max-width:520px;height:16px;transform-origin:0 50%;transform:rotate(-4deg);background:linear-gradient(90deg,rgba(255,235,59,.9),rgba(255,152,0,.5) 40%,transparent);border-radius:8px;filter:blur(2px);animation:beam 1.2s ease-in-out infinite alternate;pointer-events:none}
+@keyframes beam{from{opacity:.5}to{opacity:1}}
+.eye-card{position:relative;background:linear-gradient(160deg,#fff8e1,#ffe0b2);border:4px solid #e65100;border-radius:22px;padding:clamp(16px,3vmin,30px);display:grid;gap:clamp(8px,1.6vmin,14px);box-shadow:0 0 0 6px rgba(255,193,7,.35),0 12px 40px rgba(0,0,0,.45)}
+.eye-title{justify-self:start;font-family:var(--display);font-size:clamp(20px,3.6vmin,34px);color:#fff;background:#d1452f;border-radius:12px;padding:2px 16px}
+.eye-text{margin:0;font-size:clamp(19px,3.8vmin,36px);line-height:1.55;color:#3a2618;font-weight:700}
+.eye-card small{color:#8d4b1f;font-size:clamp(14px,2.3vmin,20px)}
+.eye-ok{justify-self:center;min-width:min(240px,70%);font-size:clamp(18px,3vmin,26px)}
+@media (orientation:portrait), (max-width:700px){.eye-in{grid-template-columns:1fr}.eye-wk{width:min(170px,40vw)}.eye-beam{display:none}}
+@media (prefers-reduced-motion: reduce){.eye-fire .ef,.eye-beam{animation:none}}
 /* 唐僧小黑板 */
 .teach{position:fixed;inset:0;z-index:120;background:rgba(20,30,26,.84);display:grid;place-items:center;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));animation:tfade .25s ease-out}
 @keyframes tfade{from{opacity:0}}
