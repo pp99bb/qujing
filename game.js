@@ -3499,7 +3499,9 @@ const PARTS = {
   '爸': '先写上面的「父」，再写下面的「巴」。', '冰': '先写左边的两点水，再写右边的「水」。',
   '国': '先写外框的左边和上边，再写里面，最后封口。', '回': '先外后内再封口。',
 };
-window.QJ_HINT_DATA = { PEOPLE, WORKS, PARTS };
+// 全诗（答错时唐僧黑板上写出来）
+const POEMS = {"九月九日忆山东兄弟": {"era": "唐", "poet": "王维", "text": "独在异乡为异客，每逢佳节倍思亲。遥知兄弟登高处，遍插茱萸少一人。"}, "鹿柴": {"era": "唐", "poet": "王维", "text": "空山不见人，但闻人语响。返景入深林，复照青苔上。"}, "山居秋暝": {"era": "唐", "poet": "王维", "text": "空山新雨后，天气晚来秋。明月松间照，清泉石上流。竹喧归浣女，莲动下渔舟。随意春芳歇，王孙自可留。"}, "相思": {"era": "唐", "poet": "王维", "text": "红豆生南国，春来发几枝。愿君多采撷，此物最相思。"}, "使至塞上": {"era": "唐", "poet": "王维", "text": "单车欲问边，属国过居延。征蓬出汉塞，归雁入胡天。大漠孤烟直，长河落日圆。萧关逢候骑，都护在燕然。"}, "春晓": {"era": "唐", "poet": "孟浩然", "text": "春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。"}, "宿建德江": {"era": "唐", "poet": "孟浩然", "text": "移舟泊烟渚，日暮客愁新。野旷天低树，江清月近人。"}, "过故人庄": {"era": "唐", "poet": "孟浩然", "text": "故人具鸡黍，邀我至田家。绿树村边合，青山郭外斜。开轩面场圃，把酒话桑麻。待到重阳日，还来就菊花。"}, "池上": {"era": "唐", "poet": "白居易", "text": "小娃撑小艇，偷采白莲回。不解藏踪迹，浮萍一道开。"}, "忆江南": {"era": "唐", "poet": "白居易", "text": "江南好，风景旧曾谙。日出江花红胜火，春来江水绿如蓝。能不忆江南？"}, "赋得古原草送别": {"era": "唐", "poet": "白居易", "text": "离离原上草，一岁一枯荣。野火烧不尽，春风吹又生。远芳侵古道，晴翠接荒城。又送王孙去，萋萋满别情。"}, "暮江吟": {"era": "唐", "poet": "白居易", "text": "一道残阳铺水中，半江瑟瑟半江红。可怜九月初三夜，露似真珠月似弓。"}, "大林寺桃花": {"era": "唐", "poet": "白居易", "text": "人间四月芳菲尽，山寺桃花始盛开。长恨春归无觅处，不知转入此中来。"}, "山行": {"era": "唐", "poet": "杜牧", "text": "远上寒山石径斜，白云生处有人家。停车坐爱枫林晚，霜叶红于二月花。"}, "望洞庭": {"era": "唐", "poet": "刘禹锡", "text": "湖光秋月两相和，潭面无风镜未磨。遥望洞庭山水翠，白银盘里一青螺。"}, "静夜思": {"era": "唐", "poet": "李白", "text": "床前明月光，疑是地上霜。举头望明月，低头思故乡。"}, "望庐山瀑布": {"era": "唐", "poet": "李白", "text": "日照香炉生紫烟，遥看瀑布挂前川。飞流直下三千尺，疑是银河落九天。"}, "独坐敬亭山": {"era": "唐", "poet": "李白", "text": "众鸟高飞尽，孤云独去闲。相看两不厌，只有敬亭山。"}, "早发白帝城": {"era": "唐", "poet": "李白", "text": "朝辞白帝彩云间，千里江陵一日还。两岸猿声啼不住，轻舟已过万重山。"}, "黄鹤楼送孟浩然之广陵": {"era": "唐", "poet": "李白", "text": "故人西辞黄鹤楼，烟花三月下扬州。孤帆远影碧空尽，唯见长江天际流。"}, "望天门山": {"era": "唐", "poet": "李白", "text": "天门中断楚江开，碧水东流至此回。两岸青山相对出，孤帆一片日边来。"}, "赠汪伦": {"era": "唐", "poet": "李白", "text": "李白乘舟将欲行，忽闻岸上踏歌声。桃花潭水深千尺，不及汪伦送我情。"}, "江畔独步寻花": {"era": "唐", "poet": "杜甫", "text": "黄四娘家花满蹊，千朵万朵压枝低。留连戏蝶时时舞，自在娇莺恰恰啼。"}, "绝句（两个黄鹂鸣翠柳）": {"era": "唐", "poet": "杜甫", "text": "两个黄鹂鸣翠柳，一行白鹭上青天。窗含西岭千秋雪，门泊东吴万里船。"}, "春夜喜雨": {"era": "唐", "poet": "杜甫", "text": "好雨知时节，当春乃发生。随风潜入夜，润物细无声。野径云俱黑，江船火独明。晓看红湿处，花重锦官城。"}, "望岳": {"era": "唐", "poet": "杜甫", "text": "岱宗夫如何？齐鲁青未了。造化钟神秀，阴阳割昏晓。荡胸生曾云，决眦入归鸟。会当凌绝顶，一览众山小。"}, "题西林壁": {"era": "宋", "poet": "苏轼", "text": "横看成岭侧成峰，远近高低各不同。不识庐山真面目，只缘身在此山中。"}, "饮湖上初晴后雨": {"era": "宋", "poet": "苏轼", "text": "水光潋滟晴方好，山色空蒙雨亦奇。欲把西湖比西子，淡妆浓抹总相宜。"}, "惠崇春江晚景": {"era": "宋", "poet": "苏轼", "text": "竹外桃花三两枝，春江水暖鸭先知。蒌蒿满地芦芽短，正是河豚欲上时。"}, "小池": {"era": "宋", "poet": "杨万里", "text": "泉眼无声惜细流，树阴照水爱晴柔。小荷才露尖尖角，早有蜻蜓立上头。"}, "宿新市徐公店": {"era": "宋", "poet": "杨万里", "text": "篱落疏疏一径深，树头新绿未成阴。儿童急走追黄蝶，飞入菜花无处寻。"}, "小儿垂钓": {"era": "唐", "poet": "胡令能", "text": "蓬头稚子学垂纶，侧坐莓苔草映身。路人借问遥招手，怕得鱼惊不应人。"}, "咏鹅": {"era": "唐", "poet": "骆宾王", "text": "鹅，鹅，鹅，曲项向天歌。白毛浮绿水，红掌拨清波。"}, "登鹳雀楼": {"era": "唐", "poet": "王之涣", "text": "白日依山尽，黄河入海流。欲穷千里目，更上一层楼。"}};
+window.QJ_HINT_DATA = { PEOPLE, WORKS, PARTS, POEMS };
 })();
 
 /* 取经小英雄 · 火眼金睛的提示
@@ -4051,6 +4053,38 @@ const ICON = {
 const allyIcon = k => `<svg viewBox="30 10 140 140">${(C[k]() || '').replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')}</svg>`;
 
 const Q_Guest = () => window.QJ.Guest;
+// 平板横屏左右分栏：选项有折行时，把题目往左压窄，尽量让每个选项一行写完
+function optWraps() {
+  return $$('#bt-q .opt').filter(b => { const t = b.lastElementChild; if (!t) return false; const r = document.createRange(); r.selectNodeContents(t);
+    return new Set([...r.getClientRects()].map(x => Math.round(x.top))).size > 1; }).length;
+}
+function fitSplit() {
+  const box = $('#bt-q'), opts = $('#opts'); if (!box || !opts) return;
+  box.style.removeProperty('--qr'); opts.classList.remove('one');
+  if (getComputedStyle(box).display !== 'grid' || opts.classList.contains('wide')) return;
+  // 先试两列、题目逐步变窄；还折行就改成一列一个选项（放得下才用）
+  const tries = [['1.15fr', 0], ['1.45fr', 0], ['1.8fr', 0], ['2.2fr', 0], ['1.15fr', 1], ['1.5fr', 1], ['2fr', 1], ['2.7fr', 0]];
+  let best = null;
+  for (const [fr, one] of tries) {
+    box.style.setProperty('--qr', fr); opts.classList.toggle('one', !!one);
+    const w = optWraps(), over = box.scrollHeight > box.clientHeight + 2;
+    if (!w && !over) return;
+    const score = w * 10 + (over ? 5 : 0); if (!best || score < best.score) best = { fr, one, score };
+  }
+  box.style.setProperty('--qr', best.fr); opts.classList.toggle('one', !!best.one);
+}
+addEventListener('resize', () => requestAnimationFrame(fitSplit)); document.fonts && document.fonts.ready.then(() => fitSplit());
+// 古诗题答错时，在黑板上把整首诗写出来
+function poemBlock(q) {
+  const P = (window.QJ_HINT_DATA || {}).POEMS || {};
+  const titles = [q.q, ...q.ans.map(a => q.opts[a])].join('').match(/《([^》]+)》/g) || [];
+  let t = titles.map(x => x.slice(1, -1)).find(x => P[x]);
+  if (!t) { const right = q.ans.map(a => q.opts[a]).join(''); t = Object.keys(P).find(k => q.q.includes(k) || right === k); }
+  if (!t) return '';
+  const p = P[t], lines = p.text.match(/[^，。？！]+[，。？！]/g) || [p.text];
+  const pairs = []; for (let i = 0; i < lines.length; i += 2) pairs.push(lines.slice(i, i + 2).join(''));
+  return `<div class="bk-poem"><div class="bk-pt">《${esc(t)}》<small>${esc(p.era)} · ${esc(p.poet)}</small></div>${pairs.map(l => `<p>${esc(l)}</p>`).join('')}</div>`;
+}
 // ================= 连对火焰（像 MOBA 的连杀） =================
 const STREAK_NAME = { 3: '三连对！', 4: '势如破竹！', 5: '所向披靡！', 6: '大杀四方！', 7: '无人能挡！', 8: '天下无敌！', 10: '齐天大圣！' };
 const streakTier = n => n >= 10 ? 5 : n >= 8 ? 4 : n >= 6 ? 3 : n >= 4 ? 2 : n >= 2 ? 1 : 0;
@@ -4204,7 +4238,7 @@ class Battle {
       <div class="qtext">${esc(q.q)}</div>${q.img ? `<img class="qimg" src="${esc(q.img)}" alt="题目图片">` : ''}</div>
       <div class="qR"><div class="opts${long ? ' wide' : short ? ' short' : ''}" id="opts">${this.order.map((oi, k) => `<button type="button" class="opt" data-i="${oi}"><span class="lt">${'ABCDEF'[k]}</span><span>${esc(q.opts[oi])}</span></button>`).join('')}</div>
       ${multi ? '<div class="confirm-bar"><button type="button" class="btn gold confirm" id="confirm" disabled>选好了</button></div>' : ''}</div>`;
-    setStreak(this.streak);
+    setStreak(this.streak); fitSplit();
     if (this.cfg.wind && this.foe && this.foe.k === 'huangfeng' && !this.miniKey && Math.random() < .5) {
       const wrongs = $$('.opt').filter(b => !q.ans.includes(+b.dataset.i)); const w = pick(wrongs); if (w) { w.classList.add('hide'); setTimeout(() => w.classList.remove('hide'), 2500); }
     }
@@ -4272,6 +4306,7 @@ class Battle {
         <div class="bk-q">${esc(q.q)}</div>
         <div class="bk-a"><span>正确答案</span><b>${esc(right)}</b></div>
         ${q.exp ? `<div class="bk-exp">${esc(q.exp)}</div>` : ''}
+        ${poemBlock(q)}
         <i class="chalk"></i></div></div>
       <button type="button" class="btn gold teach-ok" disabled>请认真看（${SEC}）</button></div>`;
     document.body.appendChild(box);

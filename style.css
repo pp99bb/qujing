@@ -214,6 +214,9 @@ h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance}
 .bk-a span{font-size:clamp(14px,2.4vmin,20px);color:#c8e6c9}
 .bk-a b{font-size:clamp(26px,6.2vmin,60px);color:#ffeb3b;font-weight:400;text-shadow:0 0 12px rgba(255,235,59,.35)}
 .bk-exp{font-size:clamp(18px,3.7vmin,36px);line-height:1.6;color:#fff;border-top:2px dashed rgba(255,255,255,.35);padding-top:clamp(8px,1.6vmin,14px)}
+.bk-poem{border-top:2px dashed rgba(255,255,255,.35);padding-top:clamp(8px,1.6vmin,14px);text-align:center;display:grid;gap:2px}
+.bk-pt{font-size:clamp(20px,4vmin,38px);color:#fff59d}.bk-pt small{display:block;font-size:.55em;color:#c8e6c9}
+.bk-poem p{margin:0;font-size:clamp(18px,3.6vmin,34px);line-height:1.6;letter-spacing:.06em}
 .chalk{position:absolute;right:14px;bottom:10px;width:34px;height:10px;border-radius:3px;background:#fafafa;transform:rotate(-12deg);box-shadow:44px 2px 0 -1px #fff59d}
 .teach-ok{grid-column:1 / -1;justify-self:center;min-width:min(320px,80%);font-size:clamp(18px,3vmin,26px);padding:12px 24px}
 .teach-ok[disabled]{opacity:.65;filter:grayscale(.4)}
@@ -396,9 +399,9 @@ svg.wm{display:block}
 .qL,.qR{display:flex;flex-direction:column;gap:10px;min-width:0}
 /* 横屏的平板/电脑：题目在左、选项在右，一屏看完 */
 @media (orientation:landscape) and (min-width:900px){
-  #bt-q{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:12px 20px;align-items:start}
+  #bt-q{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,var(--qr,1.15fr));gap:12px 20px;align-items:start}
   #bt-q .qR .opts{grid-template-columns:repeat(2,minmax(0,1fr))}
-  #bt-q .qR .opts.wide{grid-template-columns:1fr}
+  #bt-q .qR .opts.wide,#bt-q .qR .opts.one{grid-template-columns:1fr}
   #bt-q .qR{padding-top:4px}
 }
 .confirm-bar{position:sticky;bottom:-6px;z-index:3;display:flex;justify-content:center;padding:8px 0 6px;background:linear-gradient(transparent,var(--paper2) 35%)}
