@@ -4239,8 +4239,12 @@ class Battle {
       <div class="qR"><div class="opts${long ? ' wide' : short ? ' short' : ''}" id="opts">${this.order.map((oi, k) => `<button type="button" class="opt" data-i="${oi}"><span class="lt">${'ABCDEF'[k]}</span><span>${esc(q.opts[oi])}</span></button>`).join('')}</div>
       ${multi ? '<div class="confirm-bar"><button type="button" class="btn gold confirm" id="confirm" disabled>选好了</button></div>' : ''}</div>`;
     setStreak(this.streak); fitSplit();
-    if (this.cfg.wind && this.foe && this.foe.k === 'huangfeng' && !this.miniKey && Math.random() < .5) {
-      const wrongs = $$('.opt').filter(b => !q.ans.includes(+b.dataset.i)); const w = pick(wrongs); if (w) { w.classList.add('hide'); setTimeout(() => w.classList.remove('hide'), 2500); }
+    // 黄风怪的三昧神风：只在和黄风怪本人打的时候吹，迷住一个错选项一小会儿，并且说清楚
+    if (this.cfg.wind && !this.chest && !this.miniKey && this.foe && this.foe.k === 'huangfeng' && this.foe.hp > 0 && Math.random() < .5) {
+      const wrongs = $$('.opt').filter(b => !q.ans.includes(+b.dataset.i)); const w = pick(wrongs);
+      if (w) { w.classList.add('hide'); w.insertAdjacentHTML('beforeend', '<i class="sand">黄沙迷眼…</i>'); Sfx.fx && Sfx.fx('wind');
+        this.ar.caption('黄风怪吹起三昧神风，黄沙迷住了一个选项！');
+        setTimeout(() => { w.classList.remove('hide'); const x = w.querySelector('.sand'); if (x) x.remove(); }, 2500); }
     }
   }
   // ---------- 作答 ----------
