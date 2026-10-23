@@ -4739,16 +4739,26 @@ function openCards() {
     return `<button type="button" class="card${seen ? '' : ' lock'}" data-g="${k}">${C[k]()}<b>${seen ? DATA.GODS[k] : '？？？'}</b><span class="frag">${[0, 1, 2].map(i => `<i class="${i < f ? 'on' : ''}"></i>`).join('')}</span><small>${u ? `可用 ${u} 次` : `碎片 ${f}/3`}</small></button>`; }).join('');
 }
 document.addEventListener('click', e => {
-  const c = e.target.closest('#cards-grid .card'); if (!c) return; const k = c.dataset.g, f = S().frags[k] || 0, u = S().cards[k] || 0;
-  if (!f && !u) return toast('还没有这位神仙的碎片：打败 Boss、复习错题都有机会获得');
-  const GI = (window.QJ_GODINFO || {})[k] || {};
-  demoModal(DATA.GODS[k], `<div class="god-info">
+  const c = e.target.closest('#cards-grid .card'); if (!c) return; Sfx.play('click'); godDetail(c.dataset.g, false);
+});
+// 神仙详情：援军卡页面和土地庙小铺共用；小铺里要在详情页点“确认兑换”才会扣灵蕴
+function godDetail(k, buy) {
+  const f = S().frags[k] || 0, u = S().cards[k] || 0, GI = (window.QJ_GODINFO || {})[k] || {}, gold = S().gold;
+  const mine = f || u ? `碎片 ${f}/3 · 还能召唤 ${u} 次。` : '还没有这位神仙的碎片。打败头目、复习错题有机会掉落，也可以在土地庙小铺用灵蕴兑换。';
+  const extra = buy ? `<button type="button" class="btn gold" id="g-buy" ${gold >= FRAG_PRICE ? '' : 'disabled'}>确认兑换 1 个碎片（${FRAG_PRICE} 灵蕴）</button><span style="color:var(--mute);align-self:center">现在有 ${gold} 灵蕴${gold < FRAG_PRICE ? '，还不够哦' : ''}</span>` : '';
+  demoModal(DATA.GODS[k], `${buy ? `<div class="row" style="justify-content:center;gap:12px">${extra}</div>` : ''}<div class="god-info">
       ${GI.tag ? `<span class="god-tag">${esc(GI.tag)}</span>` : ''}
       ${GI.story ? `<div class="god-sec"><b>在《西游记》里</b><p>${esc(GI.story)}</p></div>` : ''}
       <div class="god-sec"><b>招式</b><p>${esc(MV[k] ? MV[k].name : '—')}</p></div>
       ${GI.power ? `<div class="god-sec pw"><b>召唤能力</b><p>${esc(GI.power)}</p></div>` : ''}
-      <div class="god-sec"><b>我的援军卡</b><p>碎片 ${f}/3 · 还能召唤 ${u} 次。攒够 3 个碎片就多 3 次召唤；战斗里点“援军卡”召唤，每场一次。</p></div></div>`, MV[k] ? k : null, 'heixiong');
-});
+      <div class="god-sec"><b>我的援军卡</b><p>${mine}攒够 3 个碎片就多 3 次召唤；战斗里点“援军卡”召唤，每场一次。</p></div></div>`, MV[k] ? k : null, 'heixiong');
+  if (buy && $('#g-buy')) $('#g-buy').onclick = () => {
+    const st = S(); if (st.gold < FRAG_PRICE) return;
+    st.gold -= FRAG_PRICE; st.frags[k] = (st.frags[k] || 0) + 1; let msg = `得到 ${DATA.GODS[k]} 碎片`;
+    if (st.frags[k] >= 3) { st.frags[k] -= 3; st.cards[k] = (st.cards[k] || 0) + 3; msg = `${DATA.GODS[k]} 援军卡 +3 次！`; }
+    Sfx.play('drop'); Store.save('state'); toast(msg); renderShop(); godDetail(k, true);
+  };
+}
 
 // ================= 左下角小齿轮：声音、同步码、重置进度 =================
 function syncBlock() {
@@ -4805,7 +4815,7 @@ function renderShop() {
   const goods = SHOP.map(g => { const have = g.k === 'spirit' ? st.spirit : st.buff[g.k] || 0, full = g.max && have >= g.max;
     return `<div class="good"><span class="ic">${g.icon()}</span><span class="tx"><b>${g.n}</b><small>${g.d}</small><small style="color:var(--mute)">${g.k === 'spirit' ? '现有 ' + have : `已备好 ${have}${g.max ? ' / ' + g.max : ''}`}</small></span><button type="button" class="mini-btn pri" data-buy="${g.k}" ${st.gold >= g.price && !full ? '' : 'disabled'}>${full ? '带满了' : g.price + ' 灵蕴'}</button></div>`; }).join('');
   const gods = Object.keys(DATA.GODS).map(k => { const f = st.frags[k] || 0, u = st.cards[k] || 0;
-    return `<button type="button" class="card" data-bf="${k}" ${st.gold >= FRAG_PRICE ? '' : 'disabled'}>${C[k]()}<b>${DATA.GODS[k]}</b><span class="frag">${[0, 1, 2].map(i => `<i class="${i < f ? 'on' : ''}"></i>`).join('')}</span><small>${u ? `可用 ${u} 次` : '碎片 ' + f + '/3'}</small></button>`; }).join('');
+    return `<button type="button" class="card" data-bf="${k}">${C[k]()}<b>${DATA.GODS[k]}</b><span class="frag">${[0, 1, 2].map(i => `<i class="${i < f ? 'on' : ''}"></i>`).join('')}</span><small>${u ? `可用 ${u} 次` : '碎片 ' + f + '/3'}</small></button>`; }).join('');
   $('#shop-body').innerHTML = `<div class="shop-line">${mini(C.tudi())}<p>土地公：大圣，攒下的灵蕴可以在我这儿换东西。仙丹和锦囊只管下一次闯关，用完就没了哦！</p></div>
     <div class="goods">${goods}</div>
     <h3 style="margin:14px 0 6px">指定神仙碎片 · 每个 ${FRAG_PRICE} 灵蕴</h3><p style="margin:0 0 8px;color:var(--mute)">想要哪位神仙来帮忙，就攒灵蕴换他的碎片，3 个碎片合成 3 次召唤。</p>
@@ -4815,7 +4825,8 @@ document.addEventListener('click', e => {
   const b = e.target.closest('[data-buy]'), f = e.target.closest('[data-bf]'); if (!b && !f) return;
   const st = S(); st.buff = st.buff || {};
   if (b) { const g = SHOP.find(x => x.k === b.dataset.buy); if (st.gold < g.price) return; st.gold -= g.price; if (g.k === 'spirit') st.spirit++; else st.buff[g.k] = (st.buff[g.k] || 0) + 1; toast(`换到了 ${g.n}！`); }
-  if (f) { const k = f.dataset.bf; if (st.gold < FRAG_PRICE) return; st.gold -= FRAG_PRICE; st.frags[k] = (st.frags[k] || 0) + 1; let msg = `得到 ${DATA.GODS[k]} 碎片`; if (st.frags[k] >= 3) { st.frags[k] -= 3; st.cards[k] = (st.cards[k] || 0) + 3; msg = `${DATA.GODS[k]} 援军卡 +3 次！`; } toast(msg); }
+  if (f) { Sfx.play('click'); godDetail(f.dataset.bf, true); return; }
+  if (false) { const k = f.dataset.bf; if (st.gold < FRAG_PRICE) return; st.gold -= FRAG_PRICE; st.frags[k] = (st.frags[k] || 0) + 1; let msg = `得到 ${DATA.GODS[k]} 碎片`; if (st.frags[k] >= 3) { st.frags[k] -= 3; st.cards[k] = (st.cards[k] || 0) + 3; msg = `${DATA.GODS[k]} 援军卡 +3 次！`; } toast(msg); }
   Sfx.play('drop'); Store.save('state'); renderShop();
 });
 
