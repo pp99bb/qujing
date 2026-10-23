@@ -3376,6 +3376,106 @@ const KP_HINT = {
 window.QJ_DATA = { E, GODS, GOD_COMMON, MOB_POOL, CH, BOSS_DROP, TITLES, KP_HINT };
 })();
 
+/* 取经小英雄 · 火眼金睛的提示
+   不直接说答案，但要真的有用：按题型给“怎么想”的线索；知识题用讲解里的线索（把答案挖掉）；
+   实在没有，就给答案里的一个字。妈妈新加的题也能自动生成。 */
+(function(){
+'use strict';
+// 偏旁名字里的关键字 → 这个部首和什么有关
+const MEAN = [
+  [/三点水|水字旁|四点水/, '水'], [/两点水/, '冰、冷'], [/提手|手字旁/, '手的动作'], [/竖心|心字|心字底|心字头/, '心情、想法'],
+  [/口字旁/, '嘴巴'], [/口字框|国字框|方框/, '把东西围起来'], [/提土|土字/, '泥土'], [/木字/, '树木'], [/禾字/, '庄稼'], [/草字头/, '花草'],
+  [/金字|铁字/, '金属'], [/言字|语字/, '说话'], [/食字|饭字/, '吃东西'], [/走之|之字底|建之/, '走路、路程'], [/走字旁/, '走、跑'],
+  [/足字|提足/, '脚'], [/日字/, '太阳、时间'], [/目字/, '眼睛'], [/女字/, '女孩子、女性'], [/竹字/, '竹子'], [/雨字头/, '天气、下雨'],
+  [/宝盖|秃宝盖/, '房子、屋顶'], [/穴字/, '洞'], [/米字/, '米、粮食'], [/火字|四点底|点字旁/, '火'], [/力字/, '力气'], [/反文|折文|攵|收字/, '手拿着东西做动作'],
+  [/单人|人字/, '人'], [/双人/, '走路、行走'], [/刀字/, '刀'], [/牛字|提牛|物字/, '牛'], [/反犬/, '动物'], [/月字/, '身体'], [/子字/, '孩子'],
+  [/父字/, '爸爸'], [/田字/, '田地'], [/云字/, '云、说话'], [/立字/, '站立'], [/目字/, '眼睛'], [/米字/, '米'], [/巴字/, '巴'], [/十字头/, '数字十'],
+];
+const POS = n => /底/.test(n) ? '字的下面' : /头/.test(n) ? '字的上面' : /框/.test(n) ? '字的外面，把别的部分包起来' : /边/.test(n) ? '字的一边' : /旁/.test(n) ? '字的左边' : '';
+const meanOf = n => { for (const [re, m] of MEAN) if (re.test(n)) return m; return null; };
+const strip = s => String(s || '').replace(/[《》“”"「」]/g, '').trim();
+const NUM = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+
+function mask(text, words) {
+  let t = String(text || '');
+  words.filter(w => w && w.length).sort((a, b) => b.length - a.length).forEach(w => { t = t.split(w).join('□'.repeat(w.length)); });
+  return t;
+}
+// 挖掉答案后还剩多少“新信息”（题目里已经有的字不算）
+function info(masked, q) {
+  const qs = new Set(q.q + q.opts.join(''));
+  return [...masked].filter(c => !qs.has(c) && !/[□\s，。、；：！？“”《》（）()…—\-=+0-9a-zA-Z]/.test(c) && !'是的了在里这首诗作者写所以就叫出自本书句话说她他它们一个'.includes(c)).length;
+}
+// 正确答案里有、错误选项里都没有的字
+function uniqueChar(q) {
+  const right = strip(q.opts[q.ans[0]]), wrong = q.opts.filter((_, i) => !q.ans.includes(i)).map(strip).join('');
+  for (const c of right) if (!wrong.includes(c) && /[一-龥]/.test(c)) return c;
+  return null;
+}
+
+function make(q) {
+  if (!q || !q.opts || !q.ans || !q.ans.length) return null;
+  if (q.hint) return q.hint;
+  const ansText = q.ans.map(a => q.opts[a]);
+  const right = strip(ansText[0]);
+  const ch = (q.q.match(/[“"]([^”"]{1,2})[”"]/) || [])[1];
+  const kp = q.kp || '';
+
+  // ---- 偏旁部首 ----
+  if (kp === '偏旁部首' || /偏旁|部首/.test(q.q)) {
+    const target = (q.q.match(/偏旁是(.{2,4})？?/) || [])[1];
+    if (target) { const m = meanOf(target), p = POS(target); return `${target}在${p || '字里'}${m ? `，带它的字常常和「${m}」有关` : ''}。一个一个字看，找找哪个字的${p ? p.replace('字的', '').replace(/，.*/, '') : ''}有它。`; }
+    if (ch && ansText.length === 1) { const m = meanOf(right), p = POS(right); if (m) return `想想“${ch}”是什么意思——它和「${m}」有关。表示这个意思的部分在${p || '字里'}。`; if (p) return `看看“${ch}”${p}是哪一部分。`; }
+  }
+  // ---- 汉字结构 ----
+  if (kp === '汉字结构' || /结构/.test(q.q)) {
+    const dm = String(q.exp || '').match(/[“"][^”"]{1,2}[”"]\s*[=＝][^，。；,]*/);
+    if (ch && dm) { const dec = dm[0].trim(), parts = dec.split(/[=＝]/)[1] || ''; const n = parts.split(/[+＋]/).filter(s => s.trim()).length; return `把“${ch}”拆开：${dec}${n ? `，一共 ${n} 块` : ''}。想想这几块是左右排、上下排，还是一块包着另一块？`; }
+    if (ch && /独体/.test(right)) return `试试把“${ch}”拆成两块——拆得开吗？`;
+    if (!ch) return '把每个字都拆一拆，看看部件是左右排、上下排，还是一块包着另一块。';
+  }
+  // ---- 笔顺 ----
+  const sn = q.q.match(/第(.)笔/);
+  if (sn && ch) return `用手指在桌上把“${ch}”慢慢写一遍，一边写一边数，数到第${sn[1]}笔停下来，看看是什么笔画。`;
+
+  // ---- 思维题：只给方法，不给结果 ----
+  if (q.subj === '思维') {
+    const nums = (q.q.match(/\d+/g) || []).map(Number);
+    if (kp === '找规律' && nums.length >= 3) { const d = nums.slice(1).map((x, i) => x - nums[i]); if (d.every(x => x === d[0]) && d[0]) return `看看后一个数比前一个数${d[0] > 0 ? '多' : '少'}几，然后照着这个规律接着往下数。`; return '看看这些数是怎么变的：两个两个比一比，多了还是少了？'; }
+    if (kp === '找规律') return '先找出几个一组在重复，再看括号前面是这一组里的第几个。';
+    if (kp === '排队问题') return '画一排小圆圈当作排队的人，别忘了把题目里说的那个也画上，再数一数。';
+    if (kp === '比较推理') return '按题目说的，一个一个排好队：谁比谁高（多），排完再看两头。';
+    const first = String(q.exp || '').split(/[。；]/).filter(s => s.trim())[0] || '';
+    if (first && !ansText.some(a => strip(a) && first.includes(strip(a))) && info(first, q) >= 3) return '想一想：' + first + '。';
+    const n = parseFloat(right);
+    if (!isNaN(n) && q.opts.every(o => !isNaN(parseFloat(o)))) { const others = q.opts.map(parseFloat).filter(x => x !== n); const bigger = others.filter(x => x > n).length, smaller = others.filter(x => x < n).length; return bigger && smaller ? '答案不是最大的，也不是最小的。动手画一画、数一数。' : bigger ? '答案是几个选项里比较小的那个。画一画再数一数。' : '答案是几个选项里比较大的那个。画一画再数一数。'; }
+    return '拿出手指或者在纸上画一画，一步一步来。';
+  }
+
+  // ---- 知识题：讲解里挖掉答案当线索 ----
+  const words = [];
+  ansText.forEach(a => { const s = strip(a); words.push(s, '《' + s + '》', '“' + s + '”'); s.split(/[\s、，]+/).forEach(w => w.length >= 2 && words.push(w)); });
+  if (q.exp) {
+    const sentences = String(q.exp).split(/(?<=[。！？；])/).map(s => s.trim()).filter(Boolean);
+    let best = null;
+    for (const s of sentences) { const m = mask(s, words); if (m.includes('□') || !ansText.some(a => s.includes(strip(a)))) { const sc = info(m, q); if (sc >= 4 && (!best || sc > best.sc)) best = { m, sc }; } }
+    if (best) return '线索：' + best.m;
+    // 读音题：讲解里一般会说这个字在这里是什么意思
+    if (kp === '字音辨析') { const s2 = sentences.map(x => mask(x, words)).find(x => x.includes('□') && x.length >= 6); if (s2) return '线索：' + s2; return ch ? `想想“${ch}”在这里是什么意思，读音跟着意思走。` : null; }
+  }
+  // ---- 实在没有：给一个字 ----
+  const u = uniqueChar(q);
+  if (u) {
+    const isTitle = /《/.test(ansText[0]) || /哪首|诗题|题目|诗名|哪篇|哪本/.test(q.q);
+    if (isTitle) return `${/哪本|典籍|书/.test(q.q) ? '书名' : /哪篇|文章/.test(q.q) ? '文章题目' : /诗/.test(kp + q.q) ? '诗的题目' : '名字'}里有「${u}」字。`;
+    if (/是谁|作者是|哪位|谁写|谁说|哪个人/.test(q.q) && right.length <= 4 && right[0] === u) return `这个人姓「${u}」。`;
+    return `答案里有一个「${u}」字。`;
+  }
+  return '火眼金睛已经帮你烧掉了一个错的，剩下的再仔细读一遍题目。';
+}
+window.QJ_HINT = { make };
+})();
+
 /* 取经小英雄 · 主程序（一）：存储、题库、复习算法、音效、装备计算 */
 (function(){
 'use strict';
@@ -3804,10 +3904,15 @@ function streakHTML(n, pop) {
   const t = streakTier(n); if (!t) return '';
   return `<span class="streak t${t}${pop ? ' pop' : ''}">${FLAME}${t >= 2 ? '<i class="emb"></i><i class="emb"></i><i class="emb"></i><i class="emb"></i>' : ''}<b>连对 <em>×${n}</em></b></span>`;
 }
+// 连对火焰放在战场右下角（压在对战画面上），不占题目区的位置，换题换妖怪也不会消失
+function setStreak(n, pop) {
+  const dock = $('#bt-streak'); if (!dock) return;
+  if (dock.dataset.n === String(n) && !pop) return;
+  dock.dataset.n = n; dock.innerHTML = streakHTML(n, pop);
+}
+function dropStreak() { const dock = $('#bt-streak'), st = dock && dock.querySelector('.streak'); if (!st) return; st.classList.add('out'); dock.dataset.n = '0'; setTimeout(() => { if (dock.dataset.n === '0') dock.innerHTML = ''; }, 450); }
 function Battle_streakFx() {
-  const n = this.streak, old = $('#bt-q .streak');
-  const html = streakHTML(n, true);
-  if (old) old.outerHTML = html || ''; else if (html) { const tags = $('#bt-q .qtags'); if (tags) tags.insertAdjacentHTML('beforeend', html); }
+  const n = this.streak; setStreak(n, true);
   const name = STREAK_NAME[n] || (n >= 12 && n % 2 === 0 ? `超神·${n} 连对！` : null);
   if (!name) return;
   const t = streakTier(n); Sfx.fx('streak', t);
@@ -3846,7 +3951,7 @@ class Battle {
     $('#bt-title').textContent = this.cfg.title;
     ar.put(ar.L, Gear.wukong());
     this.renderHP(); this.renderSkills();
-    $('#bt-q').innerHTML = '';
+    $('#bt-q').innerHTML = ''; { const d = $('#bt-streak'); if (d) { d.innerHTML = ''; d.dataset.n = '0'; } }
     if (this.foe) { ar.put(ar.R, enemySvg(this.foe.k)); ar.enter(ar.R); setTimeout(() => this.live && Sfx.cry(this.foe.k), 300); }
     ar.onHit = D => { if (!this.live) return; if (D === ar.L) Sfx.fx('hurtMe'); else { const k = this.miniKey || (this.foe && this.foe.k); if (k && !this.chest) Sfx.hurt(k); } };
     ar.enter(ar.L, 1);
@@ -3897,7 +4002,7 @@ class Battle {
     const ar = this.ar;
     if (this.mode !== 'free' && this.hp <= 0) return;
     // 换题、换妖怪的过渡里题目先清掉，但连对火焰留在原地
-    { this.busy = true; const st = this.streak >= 2 && $('#bt-q .streak:not(.out)'); $('#bt-q').innerHTML = st ? '<div class="qtags"></div>' : ''; if (st) { st.classList.remove('pop'); $('#bt-q .qtags').appendChild(st); } }
+    this.busy = true; $('#bt-q').innerHTML = '';
     if (this.mode !== 'free' && this.foes.every(f => f.hp <= 0)) {
       if (this.i >= this.q.length) { if (this.chest) await this.chestFinale(); if (!this.live) return; return this.finish('win'); }
       if (!this.chest) {
@@ -3938,12 +4043,13 @@ class Battle {
     if (!this.live) return;
     const q = this.cur; this.order = shuffle(q.opts.map((_, i) => i));
     const multi = q.ans.length > 1;
-    const long = q.opts.some(o => o.length > 14);
+    const long = q.opts.some(o => o.length > 14), short = q.opts.length === 3 && q.opts.every(o => o.length <= 10);
     const rev = SRS.isReview(q);
-    $('#bt-q').innerHTML = `<div class="qtags"><span class="tag subj">${esc(q.subj)}</span><span class="tag">${esc(q.kp)}</span>${rev ? '<span class="tag rev">错题复习</span>' : ''}${multi ? '<span class="tag multi">多选</span>' : ''}${streakHTML(this.streak)}</div>
-      <div class="qtext">${esc(q.q)}</div>${q.img ? `<img class="qimg" src="${esc(q.img)}" alt="题目图片">` : ''}
-      <div class="opts${long ? ' wide' : ''}" id="opts">${this.order.map((oi, k) => `<button type="button" class="opt" data-i="${oi}"><span class="lt">${'ABCDEF'[k]}</span><span>${esc(q.opts[oi])}</span></button>`).join('')}</div>
-      ${multi ? '<button type="button" class="btn gold confirm" id="confirm" disabled>选好了</button>' : ''}`;
+    $('#bt-q').innerHTML = `<div class="qL"><div class="qtags"><span class="tag subj">${esc(q.subj)}</span><span class="tag">${esc(q.kp)}</span>${rev ? '<span class="tag rev">错题复习</span>' : ''}${multi ? '<span class="tag multi">多选</span>' : ''}</div>
+      <div class="qtext">${esc(q.q)}</div>${q.img ? `<img class="qimg" src="${esc(q.img)}" alt="题目图片">` : ''}</div>
+      <div class="qR"><div class="opts${long ? ' wide' : short ? ' short' : ''}" id="opts">${this.order.map((oi, k) => `<button type="button" class="opt" data-i="${oi}"><span class="lt">${'ABCDEF'[k]}</span><span>${esc(q.opts[oi])}</span></button>`).join('')}</div>
+      ${multi ? '<div class="confirm-bar"><button type="button" class="btn gold confirm" id="confirm" disabled>选好了</button></div>' : ''}</div>`;
+    setStreak(this.streak);
     if (this.cfg.wind && this.foe && this.foe.k === 'huangfeng' && !this.miniKey && Math.random() < .5) {
       const wrongs = $$('.opt').filter(b => !q.ans.includes(+b.dataset.i)); const w = pick(wrongs); if (w) { w.classList.add('hide'); setTimeout(() => w.classList.remove('hide'), 2500); }
     }
@@ -3975,7 +4081,7 @@ class Battle {
       this.i++; await sleep(120); this.next();
     } else {
       $$('.opt').forEach(b => { if (sel.has(+b.dataset.i)) b.classList.add('bad'); });
-      Sfx.play('bad'); this.streak = 0; this.wrongRow++; { const st = $('#bt-q .streak'); if (st) st.classList.add('out'); }
+      Sfx.play('bad'); this.streak = 0; this.wrongRow++; dropStreak();
       if (this.flags.dingArmed) {
         this.flags.dingArmed = false; this.ar.caption('定身术！妖怪被定住了，再选一次吧'); Sfx.fx('ding');
         $$('.opt.bad').forEach(b => { b.classList.remove('bad'); b.classList.add('gone'); });
@@ -3997,12 +4103,27 @@ class Battle {
       this.explain(q);
     }
   }
+  // 答错了：唐僧拿着教鞭在小黑板上讲这个知识点，至少停 5 秒才能关
   explain(q) {
     const right = q.ans.map(a => q.opts[a]).join('、');
-    const box = document.createElement('div'); box.className = 'explain';
-    box.innerHTML = `<h3>${this.miniKey ? name(this.miniKey) + '：嘿嘿，答错啦！' : '没关系，记住它！'}</h3><p>正确答案：<span class="ans">${esc(right)}</span></p>${q.exp ? `<p>${esc(q.exp)}</p>` : ''}<button type="button" class="btn">知道了</button>`;
-    $('#bt-q').appendChild(box);
-    box.querySelector('button').onclick = () => { Sfx.play('click'); box.remove(); this.i++; this.next(); };
+    const SEC = window.QJ_FAST ? 1 : 5;
+    const box = document.createElement('div'); box.className = 'teach'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', '唐僧讲知识点');
+    box.innerHTML = `<div class="teach-in">
+      <div class="teach-who"><div class="teach-ts">${C.tangseng()}</div><i class="teach-stick"></i>
+        <p class="teach-say">${this.miniKey ? `${esc(name(this.miniKey))}拦住了你！别急，` : '悟空，'}师父给你讲一讲：</p></div>
+      <div class="board"><div class="board-in">
+        <div class="bk-kp">知识点 · ${esc(q.kp || q.subj)}</div>
+        <div class="bk-q">${esc(q.q)}</div>
+        <div class="bk-a"><span>正确答案</span><b>${esc(right)}</b></div>
+        ${q.exp ? `<div class="bk-exp">${esc(q.exp)}</div>` : ''}
+        <i class="chalk"></i></div></div>
+      <button type="button" class="btn gold teach-ok" disabled>请认真看（${SEC}）</button></div>`;
+    document.body.appendChild(box);
+    Sfx.fx('ding');
+    const btn = box.querySelector('.teach-ok'); let left = SEC;
+    const tm = setInterval(() => { left--; if (left > 0) btn.textContent = `请认真看（${left}）`; else { clearInterval(tm); btn.disabled = false; btn.textContent = '我记住了！'; btn.classList.add('ready'); } }, 1000);
+    btn.onclick = () => { if (btn.disabled) return; Sfx.play('click'); clearInterval(tm); box.remove(); this.i++; this.next(); };
+    this._teach = box;
   }
   // ---------- 伤害 ----------
   dmg(mult = 1) {
@@ -4181,8 +4302,12 @@ class Battle {
     if (this.busy || this.done) return;
     const ar = this.ar, q = this.cur; Sfx.play('click');
     if (k === 'eye' && this.sk.eye > 0) {
-      this.sk.eye--; const h = q.hint || DATA.KP_HINT[q.kp] || '先把明显不对的选项排除掉，再仔细读一遍题目。';
-      if (!$('#bt-q .hint')) { const d = document.createElement('div'); d.className = 'hint'; d.textContent = '火眼金睛：' + h; $('#bt-q .qtext').after(d); }
+      this.sk.eye--; Sfx.fx('ready');
+      const h = (window.QJ_HINT && window.QJ_HINT.make(q)) || DATA.KP_HINT[q.kp] || '仔细再读一遍题目。';
+      // 火眼金睛先烧掉一个假答案
+      const wrongs = $$('.opt').filter(b => !q.ans.includes(+b.dataset.i) && !b.classList.contains('gone') && !b.classList.contains('burn'));
+      if (wrongs.length > 1 || (wrongs.length === 1 && q.opts.length > 2)) { const w = pick(wrongs); w.classList.add('burn'); setTimeout(() => w.classList.add('gone'), 900); }
+      if (!$('#bt-q .hint')) { const d = document.createElement('div'); d.className = 'hint'; d.innerHTML = `<b>火眼金睛</b><span>烧掉了一个假答案。${esc(h)}</span>`; $('#bt-q .qtext').after(d); }
       an(ar.L.svg, [{ filter: 'none' }, { filter: 'drop-shadow(0 0 12px #f5b800)' }, { filter: 'none' }], 900, { fill: 'none' });
     }
     if (k === 'ding' && this.sk.ding > 0 && !this.flags.dingArmed) { this.sk.ding--; this.flags.dingArmed = true; ar.caption('定身术准备好了：这题答错可以再选一次'); this.capT(3500); }
@@ -4254,7 +4379,7 @@ class Battle {
   }
   quit() { if (this.done) return show('home'); const m = $('#modal'); m.hidden = false;
     $('#modal .mbox').innerHTML = `<h2>要离开战斗吗？</h2><p>已经答过的题会记下来，但这一关不算通过。</p><div class="row"><button type="button" class="btn ghost" id="mq-no">继续战斗</button><button type="button" class="btn red" id="mq-yes">离开</button></div>`;
-    $('#mq-no').onclick = () => m.hidden = true; $('#mq-yes').onclick = () => { m.hidden = true; this.done = true; Store.save('state'); Store.save('progress'); window.QJ.goHome(); };
+    $('#mq-no').onclick = () => m.hidden = true; $('#mq-yes').onclick = () => { m.hidden = true; this.done = true; if (this._teach) this._teach.remove(); Store.save('state'); Store.save('progress'); window.QJ.goHome(); };
   }
 }
 window.QJ.Battle = Battle;

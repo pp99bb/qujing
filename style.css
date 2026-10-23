@@ -1,4 +1,5 @@
 
+html,body{-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important}
 /* 布局：全屏单页游戏，各个界面叠在一起切换；战斗界面上半是演武场，下半是题目和技能栏 */
 :root{
   --ink:#1f2a26; --mute:#5e6e66; --paper:#f4f8f2; --paper2:#e5efe6; --line:#c5d6ca;
@@ -135,7 +136,41 @@ h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance}
 .opt.hide{filter:blur(6px);pointer-events:none}
 .opts.lock .opt{pointer-events:none}
 .confirm{align-self:center}
-.hint{background:#fff8dc;border:2px dashed var(--gold);border-radius:12px;padding:8px 12px;font-size:16px}
+.hint{background:#fff8dc;border:2px dashed var(--gold);border-radius:12px;padding:8px 12px;font-size:clamp(16px,2.8vmin,24px);display:flex;gap:8px;align-items:baseline;line-height:1.5}
+.hint b{flex:none;color:#fff;background:#d1452f;border-radius:8px;padding:0 8px;font-size:.85em}
+.opt.burn{animation:burn .9s ease-in forwards;pointer-events:none}
+@keyframes burn{0%{filter:none}30%{box-shadow:0 0 0 4px #ff7043,0 0 24px #ff9800;background:#fff3e0}100%{opacity:.2;filter:grayscale(1) blur(1px);transform:scale(.96)}}
+/* 唐僧小黑板 */
+.teach{position:fixed;inset:0;z-index:120;background:rgba(20,30,26,.84);display:grid;place-items:center;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));animation:tfade .25s ease-out}
+@keyframes tfade{from{opacity:0}}
+.teach-in{width:min(1100px,100%);max-height:100%;display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,2.6fr);grid-template-rows:1fr auto;gap:10px 16px;align-items:end;animation:tpop .35s cubic-bezier(.3,1.4,.5,1)}
+@keyframes tpop{from{transform:scale(.85);opacity:0}}
+.teach-who{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.teach-ts svg{width:min(220px,26vmin);height:auto;overflow:visible}
+.teach-stick{position:absolute;right:-30%;top:34%;width:70%;height:6px;border-radius:3px;background:linear-gradient(90deg,#8d5a2b,#c49a6c);border:1.5px solid #3a2618;transform-origin:0 50%;transform:rotate(-24deg);animation:stick 1.2s ease-in-out infinite}
+@keyframes stick{0%,100%{transform:rotate(-24deg)}50%{transform:rotate(-14deg)}}
+.teach-say{order:-1;margin:0;background:#fffaf0;border-radius:14px;padding:8px 12px;font-size:clamp(15px,2.6vmin,22px);font-weight:700;color:#3a2618;position:relative}
+.board{background:#7b4a26;border-radius:18px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.4),inset 0 0 0 3px #a8703f;min-width:0;max-height:calc(100vh - 120px);display:flex}
+.board-in{position:relative;flex:1;background:radial-gradient(ellipse at 30% 20%,#2f6b4f,#21503a 70%);border-radius:10px;padding:clamp(14px,3vmin,30px);color:#f5f5ee;display:grid;gap:clamp(8px,1.8vmin,16px);overflow-y:auto;font-family:var(--display),var(--body)}
+.bk-kp{justify-self:start;font-size:clamp(13px,2.2vmin,19px);border:2px solid rgba(255,255,255,.5);border-radius:99px;padding:2px 12px;color:#fff59d}
+.bk-q{font-size:clamp(18px,3.7vmin,36px);line-height:1.45;color:#e8f5e9}
+.bk-a{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
+.bk-a span{font-size:clamp(14px,2.4vmin,20px);color:#c8e6c9}
+.bk-a b{font-size:clamp(26px,6.2vmin,60px);color:#ffeb3b;font-weight:400;text-shadow:0 0 12px rgba(255,235,59,.35)}
+.bk-exp{font-size:clamp(18px,3.7vmin,36px);line-height:1.6;color:#fff;border-top:2px dashed rgba(255,255,255,.35);padding-top:clamp(8px,1.6vmin,14px)}
+.chalk{position:absolute;right:14px;bottom:10px;width:34px;height:10px;border-radius:3px;background:#fafafa;transform:rotate(-12deg);box-shadow:44px 2px 0 -1px #fff59d}
+.teach-ok{grid-column:1 / -1;justify-self:center;min-width:min(320px,80%);font-size:clamp(18px,3vmin,26px);padding:12px 24px}
+.teach-ok[disabled]{opacity:.65;filter:grayscale(.4)}
+.teach-ok.ready{animation:pulse 1s infinite}
+@media (orientation:portrait), (max-width:700px){
+  .teach-in{grid-template-columns:1fr;grid-template-rows:auto auto auto;align-items:stretch}
+  .teach-who{flex-direction:row;align-items:flex-end;order:0}
+  .teach-ts svg{width:min(120px,24vw)}
+  .teach-stick{display:none}
+  .teach-say{flex:1;order:1;margin-bottom:10px}
+  .board{max-height:none}
+}
+
 .explain{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:4px solid var(--bad);border-radius:20px 20px 0 0;padding:16px 18px max(14px,env(safe-area-inset-bottom,0px));box-shadow:0 -10px 30px rgba(0,0,0,.15);display:grid;gap:10px;z-index:10;animation:up .3s ease-out;padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
 .explain.good{border-top-color:var(--ok)}
 .explain h3{font-size:22px;color:var(--bad)}.explain.good h3{color:var(--ok)}
@@ -298,6 +333,20 @@ svg.wm{display:block}
 @keyframes wmBob{50%{transform:translateY(-4px)}}@keyframes wmWalk{50%{transform:translateY(-12px)}}
 /* 连对火焰 */
 .qtags{position:relative}
+.streak-dock{position:absolute;right:max(14px,env(safe-area-inset-right,0px));bottom:6px;z-index:6;pointer-events:none}
+.streak-dock .streak{margin:0}
+.qL,.qR{display:flex;flex-direction:column;gap:10px;min-width:0}
+/* 横屏的平板/电脑：题目在左、选项在右，一屏看完 */
+@media (orientation:landscape) and (min-width:900px){
+  #bt-q{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:12px 20px;align-items:start}
+  #bt-q .qR .opts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #bt-q .qR .opts.wide{grid-template-columns:1fr}
+  #bt-q .qR{padding-top:4px}
+}
+.confirm-bar{position:sticky;bottom:-6px;z-index:3;display:flex;justify-content:center;padding:8px 0 6px;background:linear-gradient(transparent,var(--paper2) 35%)}
+.confirm-bar .confirm{min-width:min(280px,70%)}
+@media (min-width:900px){.opts.short{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (orientation:landscape) and (max-height:900px){.arena{height:min(36vh,calc(220px*var(--s) + 70px))}}
 .streak{margin-left:auto;position:relative;display:inline-flex;align-items:center;justify-content:center;padding:6px 16px 4px;min-width:120px;isolation:isolate;--c1:#ff9800;--c2:#ffe082;--tx:#c62828;font-size:22px}
 .streak b{position:relative;z-index:2;font-family:var(--display);font-weight:400;color:var(--tx);white-space:nowrap;-webkit-text-stroke:5px #fff;paint-order:stroke fill;text-shadow:0 2px 6px rgba(0,0,0,.25)}
 .streak b em{font-style:normal;font-size:1.25em}
@@ -341,6 +390,34 @@ body[data-screen="battle"] .gearbtn,body[data-screen="parent"] .gearbtn,body.par
 .gl-box{background:var(--paper);border-radius:20px;padding:20px 22px;max-width:420px;width:100%;display:grid;gap:12px}
 .gl-box h2{margin:0;font-family:var(--display);font-weight:400;font-size:28px;color:var(--cin)}
 .gl-box p{margin:0}
+/* ===== 平板（iPad 等触屏大屏）：字和按钮整体放大 ===== */
+@media (pointer:coarse) and (min-width:700px), (hover:none) and (min-width:700px){
+  body{font-size:18px}
+  .btn{font-size:21px}.pill{font-size:17px}.topbar h2{font-size:30px}
+  .rank b{font-size:26px}
+  .mode b{font-size:27px}.mode small{font-size:15.5px}.mode.big b{font-size:36px}
+  .stage b{font-size:22px}.stage small{font-size:14.5px}
+  .intro-box h2{font-size:36px}.intro-line p{font-size:22px}.intro-foes div{font-size:15px}
+  .bt-top .stg{font-size:24px}
+  .capbar{font-size:26px}
+  .hpbox .nm{font-size:21px}.hpbar span{font-size:13px}
+  .tag{font-size:15.5px}
+  .opt{min-height:72px;padding:14px 18px}.opt .lt{font-size:19px;width:34px;height:34px}
+  .sk{font-size:15px;min-width:86px}.sk svg{width:40px;height:40px}.sk .sd,.focus .sd{font-size:12.5px}.sk .n{font-size:13px;min-width:24px;height:24px}
+  .focus{min-width:130px}.focus button{font-size:18px}
+  .res-box h2{font-size:44px}.loot .it{font-size:15px}
+  .card b{font-size:21px}
+  table.stats{font-size:17px}.set{font-size:15px}.tabs button{font-size:18px}
+  .score{font-size:36px}.timer{font-size:46px}
+  .volrow{font-size:21px}
+  .chest-pop{font-size:17px}
+  .streak{font-size:26px}.streak.t2{font-size:30px}.streak.t3{font-size:33px}.streak.t4{font-size:36px}.streak.t5{font-size:40px}
+  .streak-banner small{font-size:19px}
+  .gl-box h2{font-size:32px}
+}
+/* 题目和选项按屏幕大小自动变大变小（手机 → 平板 → 电脑） */
+.qtext{font-size:clamp(19px,4.1vmin,40px)}
+.opt{font-size:clamp(17px,3.3vmin,32px)}
 /* ===== 手机竖屏 ===== */
 @media (max-width:520px){
   .home-top{padding-block:8px}
@@ -361,8 +438,7 @@ body[data-screen="battle"] .gearbtn,body[data-screen="parent"] .gearbtn,body.par
   .bt-top .back{padding:6px 10px;font-size:14px}
   .bt-top .gearin{width:30px;height:30px}
   .qpanel{gap:8px;padding-block:8px 4px}
-  .qtext{font-size:19px}
-  .opt{min-height:50px;padding:9px 12px;font-size:17px}
+  .opt{min-height:50px;padding:9px 12px}
   .skills{gap:5px;padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}
   .sk{min-width:0;flex:1 1 0;padding:3px 3px;font-size:11.5px;border-radius:12px}
   .sk svg{width:26px;height:26px}
