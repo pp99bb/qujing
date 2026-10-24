@@ -3759,7 +3759,8 @@ const SRS = {
     const t = today(); const r = Store.prog.q[q.id] || { b: 0, due: t, c: 0, w: 0, t };
     if (ok) { r.c++; r.b = Math.min(5, (r.b || 0) + 1); r.due = t + INT[r.b]; }
     else { r.w++; r.b = 0; r.due = t + 1; }
-    r.ls = Store.prog.sess || 0; r.lok = ok;
+    Store.prog.n = (Store.prog.n || 0) + 1;
+    r.ls = Store.prog.sess || 0; r.ln = Store.prog.n; r.lok = ok;
     r.t = t; Store.prog.q[q.id] = r; Store.save('progress');
   },
   kpStats(banks) {
@@ -3768,8 +3769,10 @@ const SRS = {
       s.n++; const r = this.rec(q.id); if (r) { s.seen++; if (r.b >= 3) s.mastered++; if (r.w) s.wrong++; s.score += Math.min(1, r.b / 3); } });
     return Object.values(m).map(s => Object.assign(s, { pct: s.n ? Math.round(s.score / s.n * 100) : 0 }));
   },
-  // 答对的题，5 关之内不再出（每次开一关算一关）
-  recentOk(q) { const r = this.rec(q.id); return !!(r && r.lok && (Store.prog.sess || 0) - (r.ls || 0) < 5); },
+  // 答对的题：之后再答 50 道题之内不再出（老记录没有题数，就按 5 关算）
+  GAP: 50,
+  recentOk(q) { const r = this.rec(q.id); if (!r || !r.lok) return false;
+    return r.ln != null ? (Store.prog.n || 0) - r.ln < this.GAP : (Store.prog.sess || 0) - (r.ls || 0) < 5; },
   // 组一局题：最多 30% 复习错题，其余尽量出没做过的新题；新题不够再用很久没见的旧题
   pick(n, o = {}) {
     if (!o.cont) { Store.prog.sess = (Store.prog.sess || 0) + 1; Store.save('progress'); }
@@ -3782,9 +3785,10 @@ const SRS = {
     const fill = (P, k, out) => {
       const recent = P.filter(q => this.recentOk(q)).sort((x, y) => (this.rec(x.id).ls || 0) - (this.rec(y.id).ls || 0));
       const rest = P.filter(q => !this.recentOk(q) && !out.includes(q));
-      const due = shuffle(rest.filter(q => this.isDue(q))).sort((a, b) => (this.isReview(b) - this.isReview(a)) || ((this.rec(a.id) || {}).due || 0) - ((this.rec(b.id) || {}).due || 0));
+      const due = shuffle(rest.filter(q => this.isDue(q) && this.isReview(q))).sort((a, b) => ((this.rec(a.id) || {}).due || 0) - ((this.rec(b.id) || {}).due || 0));
       const fresh = shuffle(rest.filter(q => !this.rec(q.id) && !this.isDue(q))).sort((a, b) => (focus.includes(b.kp) - focus.includes(a.kp)) || ((a.d || 1) - (b.d || 1)));
-      const known = rest.filter(q => { const r = this.rec(q.id); return r && !this.isDue(q); }).sort((a, b) => (focus.includes(b.kp) - focus.includes(a.kp)) || ((this.rec(a.id).ls || 0) - (this.rec(b.id).ls || 0)) || (Math.random() - .5));
+      // 做过的旧题（包括到期该巩固的）：最久没见的先出
+      const known = rest.filter(q => { const r = this.rec(q.id); return r && !due.includes(q); }).sort((a, b) => (this.isDue(b) - this.isDue(a)) || (focus.includes(b.kp) - focus.includes(a.kp)) || ((this.rec(a.id).ln || this.rec(a.id).ls || 0) - (this.rec(b.id).ln || this.rec(b.id).ls || 0)) || (Math.random() - .5));
       const goal = out.length + k;
       take(due, Math.ceil(k * .3), out); take(fresh, goal - out.length, out); take(known, goal - out.length, out);
       take(due, goal - out.length, out); take(recent, goal - out.length, out);
@@ -3801,12 +3805,14 @@ const SRS = {
   },
   ease(q) { const r = this.rec(q.id); return (r ? r.b * 2 + (r.c - r.w) : 0) - (q.d || 1); },
   variant(q, used) {
-    const cands = Bank.all.filter(x => x.kp === q.kp && x.subj === q.subj && x.id !== q.id && !used.has(x.id));
+    let cands = Bank.all.filter(x => x.kp === q.kp && x.subj === q.subj && x.id !== q.id && !used.has(x.id));
+    if (cands.some(x => !this.recentOk(x))) cands = cands.filter(x => !this.recentOk(x));
     if (!cands.length) return null;
     return cands.sort((a, b) => ((this.rec(a.id) || { b: 0 }).b - (this.rec(b.id) || { b: 0 }).b) + (Math.random() - .5))[0];
   },
   easy(used) {
-    const c = Bank.active().filter(q => !used.has(q.id)).sort((a, b) => this.ease(b) - this.ease(a));
+    let c = Bank.active().filter(q => !used.has(q.id)); if (c.some(q => !this.recentOk(q))) c = c.filter(q => !this.recentOk(q));
+    c.sort((a, b) => this.ease(b) - this.ease(a));
     return c.length ? c[Math.floor(Math.random() * Math.min(8, c.length))] : null;
   },
 };
@@ -3950,6 +3956,45 @@ const Sync = {
   },
   async test() { const r = await fetch(`https://api.github.com/repos/${this.repo}`, { cache: 'no-store', headers: { Authorization: 'Bearer ' + this.token, Accept: 'application/vnd.github+json' } }); if (!r.ok) throw new Error(r.status === 401 ? '同步码不对或已过期' : r.status === 404 ? '找不到仓库 ' + this.repo + '（或同步码没有它的权限）' : 'GitHub ' + r.status); const j = await r.json(); if (!j.private) toast('提醒：数据仓库是公开的，建议改成私有', 4000); return true; },
 
+  // ---------- 多台设备合并取经之路 ----------
+  // 规则：谁后“重置进度”以谁为准；通关、影神图、装备、同伴、修为取两边的并集/最大值；
+  // 灵蕴、碎片、援军卡这些会花掉的东西，以最近玩过的那台为准；每道题的记录取答得多的那份
+  mergeKid(L, R) {
+    if (!R || !R.state) return L;
+    const ls = L.state, rs = R.state, lr = ls.resetAt || 0, rr = rs.resetAt || 0;
+    if (rr > lr) return { state: clone(rs), progress: Object.assign({ q: {}, ts: 0 }, clone(R.progress || {})) };
+    if (lr > rr) return L;
+    const act = P => Object.keys((P || {}).q || {}).length, la = act(L.progress), ra = act(R.progress);
+    // 一边还没答过题（比如刚装好的新设备），会花掉的东西就以玩过的那边为准
+    const newer = !la && ra ? rs : !ra && la ? ls : (rs.ts || 0) > (ls.ts || 0) ? rs : ls, older = newer === rs ? ls : rs;
+    const st = clone(newer);
+    st.xp = Math.max(ls.xp || 0, rs.xp || 0); st.raceBest = Math.max(ls.raceBest || 0, rs.raceBest || 0);
+    st.seenTut = !!(ls.seenTut || rs.seenTut);
+    const maxMap = k => { const o = Object.assign({}, older[k] || {}); for (const [a, v] of Object.entries(newer[k] || {})) o[a] = Math.max(v || 0, o[a] || 0); return o; };
+    st.cleared = maxMap('cleared'); st.codex = maxMap('codex');
+    st.allies = [...new Set([...(ls.allies || []), ...(rs.allies || [])])];
+    st.inv = Object.assign({}, older.inv || {}); for (const [id, v] of Object.entries(newer.inv || {})) st.inv[id] = { lv: Math.max(v.lv || 0, (st.inv[id] || {}).lv || 0) };
+    const lp = L.progress || { q: {} }, rp = R.progress || { q: {} }, q = Object.assign({}, rp.q || {});
+    for (const [id, a] of Object.entries(lp.q || {})) { const b = q[id]; if (!b || ((a.c || 0) + (a.w || 0)) > ((b.c || 0) + (b.w || 0)) || (((a.c || 0) + (a.w || 0)) === ((b.c || 0) + (b.w || 0)) && (a.t || 0) >= (b.t || 0))) q[id] = a; }
+    const pr = Object.assign({}, rp, lp, { q, n: Math.max(lp.n || 0, rp.n || 0), sess: Math.max(lp.sess || 0, rp.sess || 0), ts: Math.max(lp.ts || 0, rp.ts || 0) });
+    return { state: st, progress: pr };
+  },
+  // 把合并结果放回这台设备（原地改，正在打的这一关不受影响）
+  applyKid(M) {
+    const before = JSON.stringify([Store.state, Store.prog]);
+    for (const k of Object.keys(Store.state)) if (!(k in M.state)) delete Store.state[k];
+    Object.assign(Store.state, M.state); Object.assign(Store.prog, M.progress);
+    if (JSON.stringify([Store.state, Store.prog]) === before) return false;
+    Store.ls('state', Store.state); Store.ls('progress', Store.prog);
+    Store.onRemote.forEach(f => f('state')); return true;
+  },
+  // 小齿轮里的“同步取经之路”按钮：马上拉下来合并，再推上去
+  async syncKid() {
+    if (!this.on || window.QJ_APP === 'parent') throw new Error('还没有填同步码');
+    clearTimeout(this.timers.kid); let changed = false;
+    await this.put('data/kid.json', remote => { const M = this.mergeKid({ state: clone(Store.state), progress: clone(Store.prog) }, remote); changed = this.applyKid(M); return { at: Date.now(), state: Store.state, progress: Store.prog }; }, 'kid progress');
+    this.last = Date.now(); this.err = ''; Sync.onStatus.forEach(f => f()); return changed;
+  },
   // ---------- 拉取 ----------
   mergeCustom(remote) {
     if (!remote) return false; let changed = false;
@@ -3961,7 +4006,7 @@ const Sync = {
     if (!this.on || this.busy) return; this.busy = true;
     try {
       const isParent = window.QJ_APP === 'parent';
-      const [cu, se, kid, cmd] = await Promise.all([this.get('data/custom.json'), this.get('data/settings.json'), isParent ? this.get('data/kid.json') : null, isParent ? null : this.get('data/cmd.json')]);
+      const [cu, se, kid, cmd] = await Promise.all([this.get('data/custom.json'), this.get('data/settings.json'), this.get('data/kid.json'), isParent ? null : this.get('data/cmd.json')]);
       this.mergeCustom(cu);
       if (se && (se.ts || 0) > (Store.ls('sync_settings_ts') || 0)) {
         Store.settings = Object.assign(Store.settings, se); Store.ls('settings', Store.settings); Store.ls('sync_settings_ts', se.ts || 0);
@@ -3973,6 +4018,8 @@ const Sync = {
         if (kid.progress) Store.prog = Object.assign({ q: {}, ts: 0 }, kid.progress);
         Store.onRemote.forEach(f => f('state'));
       }
+      // 别的设备玩过：把那边的取经之路合并进来
+      if (!isParent && kid) this.applyKid(this.mergeKid({ state: clone(Store.state), progress: clone(Store.prog) }, kid));
       if (!isParent && cmd && cmd.reset && cmd.reset > (Store.state.resetAt || 0)) {
         Store.state = Object.assign(clone(window.QJ_DEF_STATE), { resetAt: cmd.reset }); Store.prog = { q: {}, ts: 0 };
         Store.ls('state', Store.state); Store.ls('progress', Store.prog); this.pushKid(0);
@@ -3986,7 +4033,7 @@ const Sync = {
   pushKid(delay = 5000) {
     if (!this.on || window.QJ_APP === 'parent') return;
     clearTimeout(this.timers.kid);
-    this.timers.kid = setTimeout(() => this.put('data/kid.json', () => ({ at: Date.now(), state: Store.state, progress: Store.prog }), 'kid progress').then(() => { this.err = ''; }).catch(e => { this.err = e.message; }), delay);
+    this.timers.kid = setTimeout(() => this.put('data/kid.json', remote => { this.applyKid(this.mergeKid({ state: clone(Store.state), progress: clone(Store.prog) }, remote)); return { at: Date.now(), state: Store.state, progress: Store.prog }; }, 'kid progress').then(() => { this.err = ''; }).catch(e => { this.err = e.message; }), delay);
   },
   async pushQuestion(q) { if (!this.on) return; await this.put('data/custom.json', remote => Object.assign(remote || {}, { [q.id]: q }), 'question ' + q.id); },
   async pushQuestions(list) { if (!this.on || !list.length) return; await this.put('data/custom.json', remote => { const r = remote || {}; list.forEach(q => r[q.id] = q); return r; }, `add ${list.length} questions`); },
@@ -4768,12 +4815,17 @@ function openCodex() {
   $('#codex-grid').innerHTML = keys.map(k => { const n = S().codex[k]; return `<button type="button" class="card${n ? '' : ' lock'}" data-c="${k}">${C[k]()}<b>${n ? name(k) : '？？？'}</b><small>${n ? `打败 ${n} 次` : (DATA.E[k].place || '')}</small></button>`; }).join('');
   $('#codex-count').textContent = `${keys.filter(k => S().codex[k]).length} / ${keys.length}`;
 }
-function demoModal(title, body, playA, playD, extra) {
+// 详情页：平板横屏左右两栏（左边大舞台 + 按钮，右边简短大字介绍）；竖屏/手机上下排，按钮紧跟在舞台下面
+function demoModal(title, body, playA, playD, extra, opt = {}) {
   const m = $('#modal'); m.hidden = false;
-  $('#modal .mbox').innerHTML = `<button type="button" class="x" aria-label="关闭">×</button><h2>${title}</h2>
+  $('#modal .mbox').innerHTML = `<button type="button" class="x" aria-label="关闭">×</button>
+    <div class="det"><div class="det-L"><h2>${title}${opt.tag ? `<span class="god-tag">${esc(opt.tag)}</span>` : ''}</h2>
     <div class="arena mini-arena" id="m-arena"><div class="hill"></div><div class="gnd"></div><div class="slot L"><div class="mover"><div class="flip"></div></div></div><div class="slot R"><div class="mover"><div class="flip"></div></div></div><div class="fx"></div><div class="capbar"></div></div>
-    ${body}<div class="row">${playA ? '<button type="button" class="btn" id="m-play">看招式</button>' : ''}${extra || ''}</div>`;
-  const ar = makeArena($('#m-arena')); ar.fit();
+    <div class="row det-btns">${playA ? `<button type="button" class="btn" id="m-play">▶ 看招式${opt.move ? '：' + esc(opt.move) : ''}</button>` : ''}${extra || ''}</div></div>
+    <div class="det-R">${body}</div></div>`;
+  const ar = makeArena($('#m-arena'));
+  ar.fit = () => { const r = $('#m-arena'); if (!r) return; const w = r.clientWidth, h = r.clientHeight; if (!w || !h) return; r.style.setProperty('--s', Math.max(.5, Math.min(1.7, w / 430, (h - 50) / 235)).toFixed(3)); };
+  ar.fit();
   ar.put(ar.L, playA === 'wukong' ? Gear.wukong() : C[playA]()); ar.put(ar.R, playD === 'wukong' ? Gear.wukong() : C[playD]());
   let busy = false;
   $('#modal .x').onclick = () => { m.hidden = true; };
@@ -4783,12 +4835,17 @@ function demoModal(title, body, playA, playD, extra) {
 document.addEventListener('click', e => {
   const c = e.target.closest('#codex-grid .card'); if (!c) return; const k = c.dataset.c, E = DATA.E[k];
   if (!S().codex[k]) return toast('还没遇到过这个妖怪');
-  const ar = demoModal(E.n, `<p><b>出没：</b>${esc(E.place || '取经路上')}　<b>招式：</b>${MV[k] ? MV[k].name : '—'}</p><p>${esc(E.story)}</p><p><b>收服结局：</b>${esc(E.end || '')}</p>`, MV[k] ? k : null, 'wukong',
-    E.kind !== 'mini' && E.kind !== 'ally' ? '<button type="button" class="btn gold" id="m-cap">看收服</button>' : '');
+  const ar = demoModal(E.n, `<div class="god-sec"><b>它的故事</b><p>${esc(E.story)}</p></div>${E.end ? `<div class="god-sec pw"><b>最后的结局</b><p>${esc(E.end)}</p></div>` : ''}<p class="det-note">打败过 ${S().codex[k]} 次</p>`, MV[k] ? k : null, 'wukong',
+    E.kind !== 'mini' && E.kind !== 'ally' ? '<button type="button" class="btn gold" id="m-cap">看收服</button>' : '', { tag: '出没：' + (E.place || '取经路上'), move: MV[k] && MV[k].name });
   if ($('#m-cap')) $('#m-cap').onclick = async () => { ar.put(ar.L, Gear.wukong()); ar.put(ar.R, C[k]()); await MV.wk_finish.run(ar, ar.L, ar.R); await ar.capture(ar.R, { key: k, beast: E.yx || null, owner: E.owner || null, text: E.end }, C); };
   if (MV[k]) { ar.put(ar.L, C[k]()); ar.put(ar.R, Gear.wukong()); }
 });
 
+// 弹窗：点空白处（深色背景）就关掉，和点右上角 × 一样；没有 × 的弹窗（比如必须输密码的）不受影响
+document.addEventListener('click', e => {
+  const m = $('#modal'); if (!m || m.hidden || e.target !== m) return;
+  const x = m.querySelector('.mbox > .x'); if (x) x.click();
+});
 // ================= 援军卡 =================
 function openCards() {
   show('cards');
@@ -4801,14 +4858,11 @@ document.addEventListener('click', e => {
 // 神仙详情：援军卡页面和土地庙小铺共用；小铺里要在详情页点“确认兑换”才会扣灵蕴
 function godDetail(k, buy) {
   const f = S().frags[k] || 0, u = S().cards[k] || 0, GI = (window.QJ_GODINFO || {})[k] || {}, gold = S().gold;
-  const mine = f || u ? `碎片 ${f}/3 · 还能召唤 ${u} 次。` : '还没有这位神仙的碎片。打败头目、复习错题有机会掉落，也可以在土地庙小铺用灵蕴兑换。';
-  const extra = buy ? `<button type="button" class="btn gold" id="g-buy" ${gold >= FRAG_PRICE ? '' : 'disabled'}>确认兑换 1 个碎片（${FRAG_PRICE} 灵蕴）</button><span style="color:var(--mute);align-self:center">现在有 ${gold} 灵蕴${gold < FRAG_PRICE ? '，还不够哦' : ''}</span>` : '';
-  demoModal(DATA.GODS[k], `${buy ? `<div class="row" style="justify-content:center;gap:12px">${extra}</div>` : ''}<div class="god-info">
-      ${GI.tag ? `<span class="god-tag">${esc(GI.tag)}</span>` : ''}
-      ${GI.story ? `<div class="god-sec"><b>在《西游记》里</b><p>${esc(GI.story)}</p></div>` : ''}
-      <div class="god-sec"><b>招式</b><p>${esc(MV[k] ? MV[k].name : '—')}</p></div>
+  const mine = f || u ? `碎片 <b>${f}/3</b>　·　还能召唤 <b>${u}</b> 次` : '还没有碎片';
+  const extra = buy ? `<button type="button" class="btn gold" id="g-buy" ${gold >= FRAG_PRICE ? '' : 'disabled'}>确认兑换碎片（${FRAG_PRICE} 灵蕴）</button><span class="det-note">现在有 ${gold} 灵蕴${gold < FRAG_PRICE ? '，还不够哦' : ''}</span>` : '';
+  demoModal(DATA.GODS[k], `${GI.story ? `<div class="god-sec"><b>在《西游记》里</b><p>${esc(GI.story)}</p></div>` : ''}
       ${GI.power ? `<div class="god-sec pw"><b>召唤能力</b><p>${esc(GI.power)}</p></div>` : ''}
-      <div class="god-sec"><b>我的援军卡</b><p>${mine}攒够 3 个碎片就多 3 次召唤；战斗里点“援军卡”召唤，每场一次。</p></div></div>`, MV[k] ? k : null, 'heixiong');
+      <div class="god-sec mine"><b>我的援军卡</b><p>${mine}</p><small>3 个碎片 = 召唤 3 次 · 碎片靠打头目、复习错题掉落，也能在土地庙换</small></div>`, MV[k] ? k : null, 'heixiong', extra, { tag: GI.tag, move: MV[k] && MV[k].name });
   if (buy && $('#g-buy')) $('#g-buy').onclick = () => {
     const st = S(); if (st.gold < FRAG_PRICE) return;
     st.gold -= FRAG_PRICE; st.frags[k] = (st.frags[k] || 0) + 1; let msg = `得到 ${DATA.GODS[k]} 碎片`;
@@ -4821,7 +4875,7 @@ function godDetail(k, buy) {
 function syncBlock() {
   const SY = Q.Sync; if (!SY || Store.cloud || window.QJ_APP !== 'kid') return '';
   return SY.on
-    ? `<div class="pcard" style="gap:6px"><b>同步</b><small style="color:var(--mute)">已和家长端同步${SY.last ? '（上次 ' + new Date(SY.last).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) + '）' : ''}。</small><div class="row"><button type="button" class="mini-btn" id="g-unsync">不再同步（改成游客）</button></div></div>`
+    ? `<div class="pcard" style="gap:6px"><b>同步</b><small style="color:var(--mute)">已和家长端同步${SY.last ? '（上次 ' + new Date(SY.last).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) + '）' : ''}。</small><div class="row"><button type="button" class="mini-btn pri" id="g-syncnow">🔄 同步取经之路</button><button type="button" class="mini-btn" id="g-unsync">不再同步（改成游客）</button></div><small id="g-syncnow-msg" style="color:var(--mute)">iPad、手机用同一个同步码，通关、装备、影神图、复习记录都会合到一起。</small></div>`
     : `<div class="pcard" style="gap:6px"><b>同步码</b><small style="color:var(--mute)">现在是游客模式，进度只存在这台设备上。有同步码的话填在这里：</small>
         <input type="password" id="g-token" placeholder="github_pat_……" style="width:100%"><div class="row"><button type="button" class="mini-btn pri" id="g-sync">保存同步码</button><span id="g-sync-msg" style="color:var(--mute)"></span></div></div>`;
 }
@@ -4844,6 +4898,13 @@ document.addEventListener('click', e => {
     Store.state = Object.assign(JSON.parse(JSON.stringify(window.QJ_DEF_STATE)), keep); Store.prog = { q: {}, ts: 0 };
     Store.save('state'); Store.save('progress'); ['state', 'progress'].forEach(n => { clearTimeout(Store.timers[n]); Store.flush(n); });
     toast('进度已清空，重新出发！'); close(); goHome();
+  };
+  if ($('#g-syncnow')) $('#g-syncnow').onclick = async () => {
+    const b = $('#g-syncnow'), msg = $('#g-syncnow-msg'); b.disabled = true; msg.textContent = '正在同步……';
+    try { await Store.flush('state'); await Store.flush('progress'); const ch = await Q.Sync.syncKid(); const st = Store.state;
+      msg.textContent = `同步好了${ch ? '，已合并别的设备的进度' : ''}：通关 ${Object.keys(st.cleared || {}).length} 关 · 修为 ${st.xp} · 灵蕴 ${st.gold}`; Sfx.play('drop'); }
+    catch (e) { msg.textContent = '没同步上：' + (e.message || e) + '（检查一下网络）'; }
+    b.disabled = false;
   };
   if ($('#g-sync')) $('#g-sync').onclick = async () => {
     const SY = Q.Sync, tok = $('#g-token').value.trim(); if (!tok) return;

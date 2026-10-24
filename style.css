@@ -279,6 +279,26 @@ h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;text-wrap:balance}
 .mbox{background:var(--paper);border-radius:22px;width:min(760px,100%);max-height:100%;overflow-y:auto;padding:18px;display:grid;gap:12px;position:relative}
 .mbox .x{position:absolute;right:12px;top:10px;border:none;background:#fff;border-radius:50%;width:40px;height:40px;font-size:22px;font-weight:900}
 .mini-arena{border-radius:16px}
+/* 详情页（影神图 / 援军卡 / 土地庙兑换） */
+.mbox:has(.det){width:min(1240px,100%);padding:clamp(14px,2.2vmin,24px)}
+.det{display:grid;gap:clamp(10px,1.8vmin,18px)}
+.det-L,.det-R{display:grid;gap:clamp(8px,1.4vmin,14px);align-content:start;min-width:0}
+.det h2{margin:0;padding-right:48px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:clamp(26px,4.4vmin,40px)}
+.det h2 .god-tag{font-family:var(--body,inherit);font-size:clamp(14px,2.2vmin,19px)}
+.det .mini-arena{height:clamp(230px,40vh,420px)}
+.det-btns{justify-content:center;align-items:center;gap:10px}
+.det-btns .btn{font-size:clamp(18px,2.8vmin,24px);padding:.55em 1.2em}
+.det-note{margin:0;color:var(--mute);font-size:clamp(14px,2.2vmin,18px)}
+.det .god-sec b{font-size:clamp(18px,2.8vmin,24px)}
+.det .god-sec p{font-size:clamp(17px,3vmin,25px);line-height:1.6}
+.det .god-sec.mine p b{display:inline;font-family:inherit;color:var(--ink);font-size:1.15em}
+.det .god-sec small{display:block;color:var(--mute);font-size:clamp(13px,2vmin,17px);margin-top:4px}
+@media (orientation:landscape) and (min-width:900px){
+  .det{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:start}
+  .det .mini-arena{height:min(56vh,480px)}
+  .det-R{max-height:calc(100vh - 80px);overflow-y:auto;padding-top:clamp(40px,6vmin,56px)}
+  .mbox:has(.det){overflow:hidden}
+}
 
 /* 背包 */
 .bag{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:16px;padding-bottom:16px}
@@ -407,6 +427,17 @@ svg.wm{display:block}
 .confirm-bar{position:sticky;bottom:-6px;z-index:3;display:flex;justify-content:center;padding:8px 0 6px;background:linear-gradient(transparent,var(--paper2) 35%)}
 .confirm-bar .confirm{min-width:min(280px,70%)}
 @media (min-width:900px){.opts.short{grid-template-columns:repeat(3,minmax(0,1fr))}}
+/* 平板：影神图 / 援军卡 / 土地庙 的字放大，小朋友看得清 */
+@media (min-width:768px) and (min-height:700px){
+  .card b{font-size:clamp(20px,2.8vmin,26px)}.card small{font-size:clamp(14px,2vmin,17px)}
+  .frag i{width:22px;height:10px}
+  .good{padding:14px 16px;gap:14px}.good .ic svg{width:60px;height:60px}
+  .good .tx b{font-size:clamp(19px,2.6vmin,24px)}.good .tx small{font-size:clamp(14px,2.1vmin,18px)}
+  .good .mini-btn{font-size:clamp(16px,2.2vmin,20px);padding:.5em 1em}
+  .goods{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+  .shop-line p{font-size:clamp(16px,2.3vmin,20px)}.shop-line svg{width:72px;height:72px}
+  #shop h3{font-size:clamp(20px,2.8vmin,26px)}
+}
 @media (orientation:landscape) and (max-height:900px){.arena{height:min(36vh,calc(220px*var(--s) + 70px))}}
 .streak{margin-left:auto;position:relative;display:inline-flex;align-items:center;justify-content:center;padding:6px 16px 4px;min-width:120px;isolation:isolate;--c1:#ff9800;--c2:#ffe082;--tx:#c62828;font-size:22px}
 .streak b{position:relative;z-index:2;font-family:var(--display);font-weight:400;color:var(--tx);white-space:nowrap;-webkit-text-stroke:5px #fff;paint-order:stroke fill;text-shadow:0 2px 6px rgba(0,0,0,.25)}
