@@ -3677,12 +3677,19 @@ const Store = {
     addEventListener('storage', e => {
       if (!e.key || !e.key.startsWith('qj_')) return;
       const k = e.key.slice(3);
-      if (k === 'custom') { this.custom = this.ls('custom') || {}; this.onBank.forEach(f => f()); return; }
+      if (k === 'custom') { const d = this.ls('custom') || {}; for (const id in d) { const m = this.custom[id]; if (!m || (d[id].updated || 0) > (m.updated || 0)) this.custom[id] = d[id]; } this.onBank.forEach(f => f()); return; }
       const map = { state: 'state', progress: 'prog', settings: 'settings' }; if (!map[k] || this.dirty[k]) return;
       const v = this.ls(k); if (!v) return;
       this[map[k]] = k === 'settings' ? deepMerge(clone(DEF_SETTINGS), v) : Object.assign(k === 'state' ? clone(DEF_STATE) : { q: {} }, v);
       this.onRemote.forEach(f => f(k));
     });
+  },
+  // 存自己加的题/删的题：先和存储里已有的合并（按修改时间取新的），绝不整个盖掉——
+  // 否则同一个浏览器里另一个页面（比如孩子页）手里的旧数据会把刚删的题“复活”
+  saveCustom() {
+    const disk = this.ls('custom') || {};
+    for (const id in disk) { const d = disk[id], m = this.custom[id]; if (!m || (d.updated || 0) > (m.updated || 0)) this.custom[id] = d; }
+    this.ls('custom', this.custom);
   },
   // 备份：导出 / 导入全部数据
   backup() { ['state', 'progress', 'settings'].forEach(n => { if (this.dirty[n]) { clearTimeout(this.timers[n]); this.flush(n); } }); return { app: 'qujing', v: 1, at: Date.now(), state: clone(this.state), progress: clone(this.prog), settings: clone(this.settings), custom: clone(this.custom) }; },
@@ -3723,7 +3730,7 @@ const Store = {
   },
   async putQuestion(q) {
     q.updated = Date.now();
-    if (!this.cloud) { this.custom[q.id] = q; this.ls('custom', this.custom); this.onBank.forEach(f => f()); return; }
+    if (!this.cloud) { this.custom[q.id] = q; this.saveCustom(); this.onBank.forEach(f => f()); return; }
     this.custom[q.id] = q; this.onBank.forEach(f => f());
     await this.db.doc('questions/' + q.id).set(clone(q));
   },
@@ -3937,7 +3944,12 @@ const Sync = {
     if (r.status === 404) { delete this.sha[path]; return null; }
     if (!r.ok) throw new Error(r.status === 401 ? '同步码不对或已过期' : r.status === 403 ? '同步码没有这个仓库的权限' : 'GitHub ' + r.status);
     const j = await r.json(); this.sha[path] = j.sha;
-    try { return JSON.parse(b64d(j.content || '')); } catch (e) { return null; }
+    let txt = j.content ? b64d(j.content) : '';
+    // 文件超过 1MB 时 GitHub 不直接给内容，要单独下载原文
+    if (!txt && j.size > 0) { const r2 = await this.req(path + '?t=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } }); if (!r2.ok) throw new Error('GitHub ' + r2.status); txt = await r2.text(); }
+    if (!txt) return null;
+    // 读不懂就报错，不能当成空文件——否则下一次写入会把云端的题全盖掉
+    try { return JSON.parse(txt); } catch (e) { throw new Error('云端文件读不出来，先不写入'); }
   },
   // 写文件；merge(remote) 返回要写的内容，冲突时会拿最新的远端内容重新合并一次
   async put(path, merge, msg) {
@@ -3999,7 +4011,7 @@ const Sync = {
   mergeCustom(remote) {
     if (!remote) return false; let changed = false;
     for (const id in remote) { const r = remote[id], l = Store.custom[id]; if (!l || (r.updated || 0) > (l.updated || 0)) { Store.custom[id] = r; changed = true; } }
-    if (changed) { Store.ls('custom', Store.custom); Store.onBank.forEach(f => f()); }
+    if (changed) { Store.saveCustom(); Store.onBank.forEach(f => f()); }
     return changed;
   },
   async pull() {
@@ -4008,6 +4020,9 @@ const Sync = {
       const isParent = window.QJ_APP === 'parent';
       const [cu, se, kid, cmd] = await Promise.all([this.get('data/custom.json'), this.get('data/settings.json'), this.get('data/kid.json'), isParent ? null : this.get('data/cmd.json')]);
       this.mergeCustom(cu);
+      // 家长端：本地有、云端没有（或云端是旧的）的改动——比如以前删题时没传上去的——这次补传
+      if (isParent) { const R = cu || {}, miss = Object.values(Store.custom).filter(q => !R[q.id] || (q.updated || 0) > (R[q.id].updated || 0));
+        if (miss.length) { this.busy = false; await this.pushQuestions(miss.map(clone)); this.busy = true; } }
       if (se && (se.ts || 0) > (Store.ls('sync_settings_ts') || 0)) {
         Store.settings = Object.assign(Store.settings, se); Store.ls('settings', Store.settings); Store.ls('sync_settings_ts', se.ts || 0);
         Store.onRemote.forEach(f => f('settings'));
@@ -4039,6 +4054,21 @@ const Sync = {
   async pushQuestions(list) { if (!this.on || !list.length) return; await this.put('data/custom.json', remote => { const r = remote || {}; list.forEach(q => r[q.id] = q); return r; }, `add ${list.length} questions`); },
   async pushSettings() { if (!this.on) return; const s = Object.assign({}, Store.settings, { ts: Date.now() }); Store.ls('sync_settings_ts', s.ts); await this.put('data/settings.json', () => s, 'settings'); },
   async pushReset() { if (!this.on) return; await this.put('data/cmd.json', () => ({ reset: Date.now() }), 'reset progress'); },
+  // 翻 data/custom.json 的全部历史版本，找出以前所有被删过的题（用来找回丢掉的删除记录）
+  async deletedHistory(onProg) {
+    const commits = [];
+    for (let page = 1; page < 30; page++) {
+      const r = await fetch(`https://api.github.com/repos/${this.repo}/commits?path=data/custom.json&per_page=100&page=${page}`, { cache: 'no-store', headers: { Authorization: 'Bearer ' + this.token, Accept: 'application/vnd.github+json' } });
+      if (!r.ok) throw new Error('GitHub ' + r.status); const a = await r.json(); commits.push(...a); if (a.length < 100) break;
+    }
+    // 每道题只看它最后一次被改的那个版本；“批量”提交全部都看
+    const seen = new Set(), pickList = [];
+    for (const c of commits) { const m = /^question (\S+)$/.exec(c.commit.message.split('\n')[0]); if (m) { if (seen.has(m[1])) continue; seen.add(m[1]); } pickList.push(c.sha); }
+    const del = {}; let done = 0;
+    const one = async sha => { try { const r = await this.req(`data/custom.json?ref=${sha}`, { headers: { Accept: 'application/vnd.github.raw' } }); if (r.ok) { const d = JSON.parse(await r.text()); for (const id in d) if (d[id] && d[id].deleted && !del[id]) del[id] = d[id]; } } catch (e) {} done++; onProg && onProg(done, pickList.length); };
+    for (let i = 0; i < pickList.length; i += 6) await Promise.all(pickList.slice(i, i + 6).map(one));
+    return { commits: commits.length, scanned: pickList.length, deleted: del };
+  },
   onStatus: [],
 };
 Q.Sync = Sync;
@@ -5349,10 +5379,17 @@ function qCard(q, actions = '') {
 function bankHTML() {
   const kps = Bank.kps(pfilter.subj);
   let list = Bank.all.filter(q => (!pfilter.bank || q.bank === pfilter.bank) && (!pfilter.subj || q.subj === pfilter.subj) && (!pfilter.kp || q.kp === pfilter.kp) && (!pfilter.src || q.src === pfilter.src) && (!pfilter.s || (q.q + q.opts.join('')).includes(pfilter.s)));
+  const dels = Object.values(Bank.byId).filter(q => q.deleted && q.q);
+  const SYn = Q.Sync && Q.Sync.on;
+  const delCard = `<div class="pcard" id="del-card"><div class="row" style="align-items:center"><b>已删除 ${dels.length} 道</b>
+      <button type="button" class="mini-btn" id="del-view">${pfilter.only === 'deleted' ? '回到题库' : '查看 / 恢复已删除的题'}</button>
+      ${SYn ? '<button type="button" class="mini-btn pri" id="del-scan">从云端历史找回以前删过的题</button>' : ''}</div>
+      <small style="color:var(--mute)">删除是按题目记下的，更新游戏不会把删掉的题加回来。${SYn ? '如果以前删的题又冒出来了，点右边按钮，会翻遍云端每一次删除的记录，再帮你重新删掉。' : '（打开同步后，还能从云端历史找回以前的删除记录）'}</small><div id="del-scan-out"></div></div>`;
+  if (pfilter.only === 'deleted') return delCard + `<div class="pcard"><p>已删除的题（孩子不会再做到）：</p></div>` + dels.slice(0, 200).map(q => qCard(q, `<button type="button" class="mini-btn" data-undel="${q.id}">恢复这道题</button>`)).join('') + (dels.length > 200 ? `<p>只显示前 200 道</p>` : '');
   if (pfilter.only === 'wrong') list = list.filter(q => (SRS.rec(q.id) || {}).w > 0).sort((a, b) => SRS.rec(b.id).w - SRS.rec(a.id).w);
   const per = 30, pages = Math.max(1, Math.ceil(list.length / per)); pfilter.page = Math.min(pfilter.page, pages - 1);
   const srcs = [...new Set(Bank.all.map(q => q.src))];
-  return `<div class="pcard"><div class="row">
+  return delCard + `<div class="pcard"><div class="row">
       <select id="f-bank"><option value="">全部题库</option>${Object.keys(Bank.banks()).map(b => `<option ${pfilter.bank === b ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
       <select id="f-subj"><option value="">全部科目</option>${['人文', '思维'].map(s => `<option ${pfilter.subj === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
       <select id="f-kp"><option value="">全部考点</option>${Object.keys(kps).map(k => `<option ${pfilter.kp === k ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select>
@@ -5454,6 +5491,27 @@ document.addEventListener('click', async e => {
       if (SY && SY.batch) { const list = SY.batch; SY.batch = null; try { await SY.pushQuestions(list); toast(`已加入 ${n} 道题，已同步到 iPad`); } catch (er) { toast(`已加入 ${n} 道题，但没同步上去：${er.message}`, 4000); } } else toast(`已加入 ${n} 道题`); pending = []; $('#imp-text').value = ''; $('#imp-preview').innerHTML = ''; renderParent(); }
     catch (er) { if (SY) SY.batch = null; toast('保存失败：' + (er.code || er.message)); btn.disabled = false; }
     return;
+  }
+  if (e.target.closest('#del-view')) { pfilter.only = pfilter.only === 'deleted' ? '' : 'deleted'; pfilter.page = 0; renderParent(); return; }
+  const ud = e.target.closest('[data-undel]'); if (ud) { const q = Object.assign({}, Bank.byId[ud.dataset.undel], { deleted: false }); await Store.putQuestion(q); toast('已恢复'); renderParent(); return; }
+  if (e.target.closest('#del-scan')) {
+    const b = e.target.closest('#del-scan'), out = $('#del-scan-out'); b.disabled = true; out.textContent = '正在读云端的历史记录……';
+    try {
+      const h = await Q.Sync.deletedHistory((d, n) => { out.textContent = `正在翻历史记录 ${d} / ${n} ……`; });
+      const back = Object.values(h.deleted).filter(q => Bank.byId[q.id] && !Bank.byId[q.id].deleted);
+      window.__delBack = back;
+      out.innerHTML = `<p>云端一共有 ${h.commits} 次题库改动；历史上删过 <b>${Object.keys(h.deleted).length}</b> 道题，其中 <b>${back.length}</b> 道现在又出现在题库里了。</p>` +
+        (back.length ? `<div class="row"><button type="button" class="mini-btn dng" id="del-reapply">把这 ${back.length} 道重新删掉</button></div><ol style="max-height:240px;overflow:auto">${back.slice(0, 100).map(q => `<li>${esc(q.q)}</li>`).join('')}</ol>` : '<p>没有需要找回的删除记录。</p>');
+    } catch (er) { out.textContent = '没读成：' + (er.message || er); }
+    b.disabled = false; return;
+  }
+  if (e.target.closest('#del-reapply')) {
+    const back = window.__delBack || [], out = $('#del-scan-out'); if (!back.length) return;
+    const SY = Q.Sync; SY.batch = [];
+    for (const q of back) await Store.putQuestion(Object.assign({}, Bank.byId[q.id], { deleted: true }));
+    const list = SY.batch; SY.batch = null;
+    try { await SY.pushQuestions(list); toast(`已重新删掉 ${back.length} 道，iPad 也会同步`); } catch (er) { toast('这台电脑上删好了，但同步没成功：' + er.message + '，下次打开会自动补传', 4500); }
+    window.__delBack = null; renderParent(); return;
   }
   const ed = e.target.closest('[data-edit]'); if (ed) return editModal(Bank.byId[ed.dataset.edit]);
   if (e.target.closest('#q-new')) return editModal(null);
